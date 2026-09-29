@@ -3,7 +3,7 @@ cmake_minimum_required(VERSION 3.21)
 project(Yozora
     VERSION 0.1.0
     DESCRIPTION "Yozora Browser - a native desktop browser built with C++ and Qt WebEngine"
-    HOMEPAGE_URL "https://github.com/yozora-browser/yozora"
+    HOMEPAGE_URL "https://github.com/Stuqpidb/yozora-browser"
     LANGUAGES CXX
 )
 

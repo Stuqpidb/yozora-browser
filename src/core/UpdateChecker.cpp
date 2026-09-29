@@ -13,7 +13,7 @@
 namespace yozora {
 
 namespace {
-constexpr auto kDefaultRepo = "yozora-browser/yozora";
+constexpr auto kDefaultRepo = "Stuqpidb/yozora-browser";
 }  // namespace
 
 UpdateChecker::UpdateChecker(QObject* parent)
