@@ -39,6 +39,16 @@ QString titleForNet(int code)
         case ErrorPage::SslProtocolError:
         case ErrorPage::InsecureResponse:
             return QStringLiteral("Secure connection failed");
+        case ErrorPage::CertificateDateInvalid:
+            return QStringLiteral("The site's certificate has expired");
+        case ErrorPage::CertificateCommonNameInvalid:
+            return QStringLiteral("The certificate does not match this site");
+        case ErrorPage::CertificateAuthorityInvalid:
+            return QStringLiteral("This site's certificate is not trusted");
+        case ErrorPage::CertificateRevoked:
+            return QStringLiteral("The site's certificate was revoked");
+        case ErrorPage::SslPinnedKeyNotInCertificateChain:
+            return QStringLiteral("This site's security key changed");
         case ErrorPage::TooManyRedirects:
             return QStringLiteral("Too many redirects");
         case ErrorPage::InvalidUrl:
@@ -91,6 +101,22 @@ QString hintForNet(int code)
             return QStringLiteral("Yozora could not verify the site's certificate. The "
                                  "connection is not protected, so loading stopped instead of "
                                  "continuing without checking.");
+        case ErrorPage::CertificateDateInvalid:
+            return QStringLiteral("The certificate has expired, so the connection cannot be "
+                                 "trusted. The site's clock or its certificate is out of date.");
+        case ErrorPage::CertificateCommonNameInvalid:
+            return QStringLiteral("The certificate was issued for a different address. This can "
+                                 "mean the connection is being intercepted by someone else.");
+        case ErrorPage::CertificateAuthorityInvalid:
+            return QStringLiteral("Yozora does not trust the authority that signed this "
+                                 "certificate, so the connection was refused.");
+        case ErrorPage::CertificateRevoked:
+        case ErrorPage::CertificateKnownInterceptionBlocked:
+            return QStringLiteral("This certificate is known to be invalid or used for "
+                                 "interception, so the connection was refused.");
+        case ErrorPage::SslPinnedKeyNotInCertificateChain:
+            return QStringLiteral("The site's identity key is not the one it used before. "
+                                 "Yozora stopped the connection instead of risking it.");
         case ErrorPage::TooManyRedirects:
             return QStringLiteral("The site keeps redirecting. This is usually a cookie problem "
                                  "on the site itself.");

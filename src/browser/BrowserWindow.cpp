@@ -6,7 +6,9 @@
 #include "core/Settings.h"
 #include "core/Theme.h"
 #include "core/UpdateChecker.h"
+#include "privacy/PermissionManager.h"
 #include "ui/AddressBar.h"
+#include "ui/ClearBrowsingDataDialog.h"
 #include "ui/NavigationBar.h"
 #include "ui/SettingsDialog.h"
 #include "ui/TabWidget.h"
@@ -40,14 +42,29 @@ namespace {
 constexpr int kMaxClosedTabs = 12;
 }
 
-BrowserWindow::BrowserWindow(WebProfile* profile, Settings* settings, QWidget* parent)
+BrowserWindow::BrowserWindow(WebProfile* profile, Settings* settings, bool privateMode,
+                             QWidget* parent)
     : QMainWindow(parent)
     , m_profile(profile)
     , m_settings(settings)
     , m_updateChecker(new UpdateChecker(this))
+    , m_private(privateMode)
 {
     buildUi();
     buildShortcuts();
+
+    // One permission manager per window. It shares the profile's permission
+    // store, so a grant in one window is visible to the others.
+    m_permissions = new PermissionManager(m_profile->profile(), m_settings, this);
+    connect(m_permissions, &PermissionManager::permissionDenied, this,
+            [this](const QString& origin, const QString& feature) {
+                showStatusMessage(tr("Blocked %1 request from %2").arg(feature, origin));
+            });
+
+    if (m_private) {
+        setWindowTitle(tr("Yozora - Private Browsing"));
+        m_navBar->setPrivateMode(true);
+    }
 
     connect(m_settings, &Settings::themeModeChanged, this, [this] { applyTheme(isDark()); });
     connect(m_settings, &Settings::searchEngineChanged, this, [this] {
@@ -59,8 +76,10 @@ BrowserWindow::BrowserWindow(WebProfile* profile, Settings* settings, QWidget* p
     applyTheme(isDark());
     newTab();
 
+    // A private window starts fresh every time, so it does not reuse the
+    // dimensions of a previous session; a normal window does.
     const QByteArray geometry = m_settings->windowGeometry();
-    if (!geometry.isEmpty()) {
+    if (!m_private && !geometry.isEmpty()) {
         restoreGeometry(geometry);
     } else {
         resize(1280, 820);
@@ -152,6 +171,7 @@ void BrowserWindow::buildShortcuts()
     add(sequence("Ctrl+W"), [this] { closeCurrentTab(); });
     add(sequence("Ctrl+Shift+T"), [this] { restoreLastClosedTab(); });
     add(sequence("Ctrl+N"), [this] { openNewWindow(); });
+    add(sequence("Ctrl+Shift+N"), [this] { openPrivateWindow(); });
 
     // Ctrl+1..9 jump to a tab, Ctrl+9 also reaches the last one.
     for (int i = 1; i <= 9; ++i) {
@@ -299,6 +319,18 @@ void BrowserWindow::connectTab(BrowserTab* tab)
     connect(tab, &BrowserTab::newTabRequested, this,
             [this](const QUrl& url, bool foreground) { newTab(url, foreground); });
     connect(tab, &BrowserTab::statusMessage, this, &BrowserWindow::showStatusMessage);
+
+    // Permission requests and external protocols belong to the window, not the
+    // page, so every new tab is wired up here as it is created.
+    if (auto* view = tab->view()) {
+        if (auto* page = qobject_cast<WebPage*>(view->page())) {
+            if (m_permissions) {
+                m_permissions->attachPage(page);
+            }
+            connect(page, &WebPage::externalProtocolRequested, this,
+                    &BrowserWindow::handleExternalProtocol);
+        }
+    }
 }
 
 void BrowserWindow::closeTab(int index)
@@ -461,12 +493,50 @@ void BrowserWindow::openNewWindow()
     window->show();
 }
 
+void BrowserWindow::openPrivateWindow()
+{
+    // A private window gets its own off-the-record profile: nothing it does is
+    // written to disk and none of it is shared with the persistent profile.
+    // The profile is parented to the window, so it is torn down with it.
+    auto* profile = WebProfile::createEphemeral(m_settings);
+    auto* window = new BrowserWindow(profile, m_settings, /*privateMode=*/true);
+    profile->setParent(window);
+    window->setAttribute(Qt::WA_DeleteOnClose);
+    window->resize(1100, 740);
+    window->show();
+}
+
+void BrowserWindow::handleExternalProtocol(const QUrl& url, int navigationType)
+{
+    Q_UNUSED(navigationType)
+    // Nothing outside the browser is launched silently. The user sees exactly
+    // which link and which scheme wants to leave Yozora first.
+    const auto answer = QMessageBox::question(
+        this, tr("Open with another application?"),
+        tr("This link wants to open an external application.\n\n"
+           "Address: %1\nScheme: %2\n\nOpen it?")
+            .arg(url.toDisplayString(), url.scheme()),
+        QMessageBox::Open | QMessageBox::Cancel, QMessageBox::Cancel);
+    if (answer == QMessageBox::Open) {
+        QDesktopServices::openUrl(url);
+    }
+}
+
 void BrowserWindow::showSettings()
 {
-    SettingsDialog dialog(m_settings, this);
+    SettingsDialog dialog(m_settings, m_profile, this);
     dialog.exec();
     if (auto* tab = currentTab()) {
         tab->updateSearchEngineUi();
+    }
+}
+
+void BrowserWindow::showClearBrowsingData()
+{
+    ClearBrowsingDataDialog dialog(m_profile, this);
+    dialog.exec();
+    if (auto* tab = currentTab()) {
+        tab->reload();
     }
 }
 
@@ -482,11 +552,17 @@ void BrowserWindow::buildMenu(const QPoint& globalPos)
     QAction* newTabAction = menu.addAction(tr("New tab\tCtrl+T"));
     connect(newTabAction, &QAction::triggered, this, [this] { newTab(); });
 
-    QAction* newWindowAction = menu.addAction(tr("New window\tCtrl+Shift+N"));
+    QAction* newWindowAction = menu.addAction(tr("New window\tCtrl+N"));
     connect(newWindowAction, &QAction::triggered, this, &BrowserWindow::openNewWindow);
+
+    QAction* privateWindowAction = menu.addAction(tr("New private window\tCtrl+Shift+N"));
+    connect(privateWindowAction, &QAction::triggered, this, &BrowserWindow::openPrivateWindow);
 
     QAction* settingsAction = menu.addAction(tr("Settings...\tCtrl+,"));
     connect(settingsAction, &QAction::triggered, this, &BrowserWindow::showSettings);
+
+    QAction* clearDataAction = menu.addAction(tr("Clear browsing data..."));
+    connect(clearDataAction, &QAction::triggered, this, &BrowserWindow::showClearBrowsingData);
     menu.addSeparator();
 
     QAction* devToolsAction = menu.addAction(tr("Developer tools\tF12"));
@@ -570,7 +646,10 @@ void BrowserWindow::applyTheme(bool dark)
 void BrowserWindow::closeEvent(QCloseEvent* event)
 {
     m_closing = true;
-    m_settings->setWindowGeometry(saveGeometry());
+    // A private window leaves no trace, including its last window size.
+    if (!m_private) {
+        m_settings->setWindowGeometry(saveGeometry());
+    }
     for (auto& devTools : m_devToolsWindows) {
         if (devTools) {
             devTools->close();

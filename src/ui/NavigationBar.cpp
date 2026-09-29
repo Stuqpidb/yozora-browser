@@ -30,6 +30,13 @@ NavigationBar::NavigationBar(QWidget* parent)
     m_layout->addWidget(m_brandLabel);
     m_layout->addSpacing(6);
 
+    // Only visible in private browsing windows.
+    m_privateBadge = new QLabel(tr("PRIVATE"), this);
+    m_privateBadge->setObjectName(QStringLiteral("privateBadge"));
+    m_privateBadge->setVisible(false);
+    m_layout->addWidget(m_privateBadge);
+    m_layout->addSpacing(4);
+
     m_backButton = makeButton(QStringLiteral("backButton"), QStringLiteral("←"), tr("Back"));
     m_forwardButton =
         makeButton(QStringLiteral("forwardButton"), QStringLiteral("→"), tr("Forward"));
@@ -105,6 +112,11 @@ void NavigationBar::setBrand(const QString& name, const QString& version)
 {
     m_brandLabel->setText(QStringLiteral("%1 %2").arg(name, version));
     m_brandLabel->setToolTip(name);
+}
+
+void NavigationBar::setPrivateMode(bool enabled)
+{
+    m_privateBadge->setVisible(enabled);
 }
 
 void NavigationBar::setCanGoBack(bool can)

@@ -1,0 +1,129 @@
+# Yozora Browser - built-in tracker blocklist
+#
+# This is a small, curated list of well known tracking, analytics and
+# advertising domains. It is deliberately NOT a full ad-blocking list: Yozora
+# blocks known trackers, not every advertisement. Only plain domain rules and
+# adblock-style "||domain^" rules are understood; any other syntax is ignored.
+#
+#   domain.com          blocks domain.com and every subdomain of it
+#   ||domain.com^       same, in the common filter-list spelling
+#   # comment / ! comment
+#
+# A rule only ever matches the host of a request, never a URL path, so a site
+# that both serves content and tracks from the same host cannot be broken by a
+# mistake here (and is not listed).
+#
+# Users may add their own rules in the file "blocklist.txt" next to the browser
+# profile (see docs/PRIVACY.md). That file is local only and is never uploaded.
+
+# --- Google analytics / ads -----------------------------------------------
+||google-analytics.com^
+||googletagmanager.com^
+||googletagservices.com^
+||googleadservices.com^
+||googlesyndication.com^
+||googleadsserving.cn^
+||doubleclick.net^
+||2mdn.net^
+||admob.com^
+||adservice.google.com^
+
+# --- Other large ad networks ---------------------------------------------
+||adnxs.com^
+||adsrvr.org^
+||advertising.com^
+||adform.net^
+||adroll.com^
+||amazon-adsystem.com^
+||bidswitch.net^
+||casalemedia.com^
+||criteo.com^
+||criteo.net^
+||media.net^
+||openx.net^
+||outbrain.com^
+||pubmatic.com^
+||rubiconproject.com^
+||sharethrough.com^
+||smartadserver.com^
+||taboola.com^
+||teads.tv^
+||yieldmo.com^
+||33across.com^
+||360yield.com^
+||smaato.net^
+||applovin.com^
+||inmobi.com^
+||mopub.com^
+||vungle.com^
+||unityads.unity3d.com^
+||adcolony.com^
+||chartboost.com^
+||startappservice.com^
+||adjust.com^
+||appsflyer.com^
+||branch.io^
+||kochava.com^
+
+# --- Analytics / behaviour ------------------------------------------------
+||scorecardresearch.com^
+||quantserve.com^
+||quantcount.com^
+||comscore.com^
+||nielsen.com^
+||imrworldwide.com^
+||hotjar.com^
+||mouseflow.com^
+||crazyegg.com^
+||fullstory.com^
+||luckyorange.com^
+||inspectlet.com^
+||smartlook.com^
+||clicktale.net^
+||sessioncam.com^
+||decibelinsight.net^
+||newrelic.com^
+||nr-data.net^
+||bugsnag.com^
+||sentry.io^
+||mixpanel.com^
+||amplitude.com^
+||segment.com^
+||segment.io^
+||heapanalytics.com^
+||kissmetrics.com^
+||matomo.cloud^
+||optimizely.com^
+||chartbeat.com^
+||chartbeat.net^
+||parsely.com^
+||plausible.io^
+||statcounter.com^
+||histats.com^
+||clarity.ms^
+
+# --- Social / cross-site trackers -----------------------------------------
+||connect.facebook.net^
+||graph.facebook.com^
+||pixel.facebook.com^
+||analytics.twitter.com^
+||ads-twitter.com^
+||t.co^
+||platform.twitter.com^
+||ads.linkedin.com^
+||snap.licdn.com^
+||px.ads.linkedin.com^
+||analytics.tiktok.com^
+||business-api.tiktok.com^
+||ads.pinterest.com^
+||ct.pinterest.com^
+||analytics.pinterest.com^
+
+# --- Regional trackers ----------------------------------------------------
+||mc.yandex.ru^
+||metrika.yandex.ru^
+||an.yandex.ru^
+||top-fwz1.mail.ru^
+||ad.mail.ru^
+||counter.yadro.ru^
+||seal.vk.com^

@@ -54,10 +54,37 @@ QIcon applicationIcon()
     return icon;
 }
 
+// The WebRTC routing policy has to be handed to Chromium through an environment
+// variable, which only Qt WebEngine reads at startup, before any profile
+// exists. This is why it is read directly from the store here rather than
+// through the Settings object (which needs QApplication).
+void applyStartupPrivacyFlags()
+{
+    const Settings::WebRtcPolicy policy = Settings::bootWebRtcPolicy();
+    if (policy == Settings::WebRtcPolicy::Default) {
+        return;
+    }
+    const char* value = policy == Settings::WebRtcPolicy::PublicInterfaceOnly
+                            ? "default_public_interface_only"
+                            : "disable_non_proxied_udp";
+
+    QByteArray flags = qgetenv("QTWEBENGINE_CHROMIUM_FLAGS");
+    if (!flags.isEmpty() && !flags.endsWith(' ')) {
+        flags.append(' ');
+    }
+    flags.append("--force-webrtc-ip-handling-policy=");
+    flags.append(value);
+    qputenv("QTWEBENGINE_CHROMIUM_FLAGS", flags);
+}
+
 }  // namespace
 
 int main(int argc, char* argv[])
 {
+    // This must happen before QApplication so Qt WebEngine picks it up when it
+    // initialises Chromium.
+    applyStartupPrivacyFlags();
+
     // Required by Qt WebEngine: the OpenGL context must be shared between the
     // widgets and the GPU process. Must be set before QApplication exists.
     QCoreApplication::setAttribute(Qt::AA_ShareOpenGLContexts, true);
@@ -77,6 +104,10 @@ int main(int argc, char* argv[])
         QStringLiteral("Yozora Browser - a native desktop browser with a Chromium engine."));
     parser.addHelpOption();
     parser.addVersionOption();
+    QCommandLineOption privateOption(
+        QStringLiteral("private"),
+        QStringLiteral("Open a private browsing window in addition to the main window."));
+    parser.addOption(privateOption);
     parser.addPositionalArgument(
         QStringLiteral("url"), QStringLiteral("Address to open on start."));
 
@@ -94,10 +125,14 @@ int main(int argc, char* argv[])
     }
     lock->setStaleLockTime(30000);
 
+    // A deferred "clear site storage" request runs here, before any profile is
+    // created, so Chromium cannot be writing the files that are removed.
+    WebProfile::purgeSiteStorageIfRequested();
+
     Settings settings;
     Theme::apply(settings.themeMode() != Settings::ThemeMode::Light);
 
-    WebProfile profile;
+    WebProfile profile(&settings);
 
     BrowserWindow window(&profile, &settings);
 
@@ -108,6 +143,10 @@ int main(int argc, char* argv[])
         window.openInFirstTab(QUrl::fromUserInput(positional.first()));
     }
     window.show();
+
+    if (parser.isSet(privateOption)) {
+        window.openPrivateWindow();
+    }
 
     return app.exec();
 }

@@ -23,21 +23,40 @@ through Qt WebEngine.
 - DevTools in a separate window (`F12`)
 - Downloads to a configurable folder, with progress and "open" / "show folder"
 - Yozora-branded error pages
-- Settings: search engine, new tab page, download folder, dark / light theme
-- All browsing data stored locally; cookies and logins survive a restart
+- Settings: search engine (including a custom one), new tab page, download
+  folder, dark / light theme
+
+### Privacy & security
+
+- **No telemetry, no tracking, no account, no cloud.**
+- Third-party cookies blocked by default; cookies can be made session-only.
+- Built-in blocking of known tracker domains, with an optional local blocklist.
+- Optional `Do Not Track` / `Global Privacy Control` headers.
+- Per-site permissions (camera, microphone, location, notifications, clipboard,
+  fonts, pointer lock) that default to **Ask**; screen sharing is refused.
+- Private browsing windows backed by a separate off-the-record profile.
+- Clear browsing data (cookies, cache, visited links, permissions).
+- Download names are sanitised, files are never overwritten, and programs are
+  never run automatically.
+- `file://` links and external protocols (`mailto:`, `tel:`, `magnet:`, ...)
+  are never opened from web content without an explicit prompt.
+- Certificate errors are always rejected; there is no "proceed anyway".
+
+See [docs/PRIVACY.md](docs/PRIVACY.md) and [docs/SECURITY.md](docs/SECURITY.md)
+for the details and the honest limits (Yozora does **not** hide your IP).
 
 ## Not in the MVP
 
-Deliberately absent for now: accounts, sync, a server, extensions, an ad
-blocker, a password manager, history and bookmarks managers, telemetry, ads,
-mobile. See the roadmap below.
+Deliberately absent for now: accounts, sync, a server, extensions, a password
+manager, history and bookmarks managers, telemetry, ads, mobile, a full ad
+blocker (only known trackers are blocked). See the roadmap below.
 
 ## Technology
 
 | | |
 |---|---|
 | Language | C++20 |
-| UI | Qt 6 Widgets (6.5+; developed against 6.8.3 LTS) |
+| UI | Qt 6 Widgets (6.8+; developed against 6.8.3 LTS) |
 | Engine | Qt WebEngine (Chromium) |
 | Build | CMake + Ninja or MSVC |
 | Platform | Windows 10/11 (primary), Linux (buildable) |
@@ -51,7 +70,8 @@ to `src/web/`, so swapping in a different engine later touches one directory.
 
 - CMake 3.21+
 - A C++20 compiler (MSVC 2022 / Clang 15+ / GCC 11+)
-- Qt 6.5 or newer with the **WebEngine** module
+- Qt 6.8 or newer with the **WebEngine** module (the per-origin permission API
+  arrives in 6.8)
 - Ninja (optional, but much faster than MSVC)
 
 ### Windows
@@ -82,8 +102,7 @@ scripts\build.cmd
 ### Linux
 
 ```sh
-cmake -S . -B build -G Ninja -DCMAKE_BUILD_TYPE=Release -DCMAKE_PREFIX_PATH=/path/to/Qt/6.8.3/gcc_64
-cmake --build build
+cmake -S . -B build -G Ninja -DCMAKE_BUILD_TYPE=Release -DCMAKE_PREFIX_PATH=/path/to/Qt/6.8.3/gcc_64cmake --build build
 ./build/bin/Yozora
 ```
 
@@ -102,18 +121,21 @@ src/
   app/                 filesystem locations
   browser/             main window and tab model
   core/                settings, search engines, theme, update check
-  ui/                  address bar, navigation bar, tab strip, start page, settings
+  privacy/             tracker list, request interceptor, permissions, download safety
+  ui/                  address bar, navigation bar, tab strip, start page, dialogs
   utils/               URL parsing and search detection
   web/                 everything that touches Qt WebEngine
-resources/             icons and the Qt resource bundle
-tests/                 unit tests (URL logic, tab behaviour)
+resources/             icons, the tracker filter list and the Qt resource bundle
+docs/                  privacy and security notes
+tests/                 unit tests (URL logic, tab behaviour, privacy logic)
 cmake/                 packaging rules
 installer/             installer assets
 ```
 
-The dependency direction is one-way: `browser/` knows about `ui/` and `web/`,
-`ui/` knows about `core/`, and `web/` knows about `core/` and `utils/`. Nothing
-in `web/` knows about windows, and nothing in `ui/` knows about WebEngine.
+The dependency direction is one-way: `browser/` knows about `ui/`, `web/` and
+`privacy/`; `ui/` knows about `core/`; `web/` knows about `core/`, `utils/` and
+`privacy/`. Nothing in `web/` knows about windows, and nothing in `ui/` knows
+about WebEngine (the profile exposes a WebEngine-free view to the settings).
 
 ## Where data is stored
 
@@ -124,12 +146,17 @@ directory:
 - Linux: `~/.local/share/Yozora/Yozora Browser`
 
 The subdirectory `profile/` holds the Chromium profile — cookies, localStorage,
-cache, service workers. Deleting it resets the browser to a clean state.
+cache, service workers. Deleting it resets the browser to a clean state. An
+optional `privacy/blocklist.txt` lets you extend the tracker list locally.
 
 ## Roadmap
 
-MVP first, then, in order: history, bookmarks, a real download manager,
-profiles, extensions, ad blocking, privacy features, auto-update.
+MVP first (done). Privacy hardening (Phase 2) is in place: cookies, tracker
+blocking, permissions, private windows and download safety. Next, in no
+particular order: history, bookmarks, a real download manager, browser
+profiles, WebRTC/fingerprinting hardening where the engine allows it, DNS over
+HTTPS, extensions, and auto-update. A full ad blocker is explicitly not a goal;
+known-tracker blocking is.
 
 ## License
 

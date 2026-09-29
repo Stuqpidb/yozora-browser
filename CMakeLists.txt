@@ -10,7 +10,7 @@ project(Yozora
 # ---------------------------------------------------------------------------
 # Qt
 # ---------------------------------------------------------------------------
-find_package(Qt6 6.5 REQUIRED COMPONENTS
+find_package(Qt6 6.8 REQUIRED COMPONENTS
     Core
     Gui
     Widgets
@@ -80,12 +80,24 @@ add_library(yozora_core STATIC
     src/core/Theme.h
     src/core/UpdateChecker.cpp
     src/core/UpdateChecker.h
+    src/privacy/DownloadSafety.cpp
+    src/privacy/DownloadSafety.h
+    src/privacy/PermissionManager.cpp
+    src/privacy/PermissionManager.h
+    src/privacy/RequestInterceptor.cpp
+    src/privacy/RequestInterceptor.h
+    src/privacy/TrackerList.cpp
+    src/privacy/TrackerList.h
     src/ui/AddressBar.cpp
     src/ui/AddressBar.h
+    src/ui/ClearBrowsingDataDialog.cpp
+    src/ui/ClearBrowsingDataDialog.h
     src/ui/NewTabPage.cpp
     src/ui/NewTabPage.h
     src/ui/NavigationBar.cpp
     src/ui/NavigationBar.h
+    src/ui/PermissionPrompt.cpp
+    src/ui/PermissionPrompt.h
     src/ui/SettingsDialog.cpp
     src/ui/SettingsDialog.h
     src/ui/TabWidget.cpp

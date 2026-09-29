@@ -10,9 +10,14 @@ QString SearchEngine::urlForQuery(const QString& query) const
     if (queryUrl.isEmpty()) {
         return {};
     }
-    // queryUrl carries a %1 placeholder; %1 is the lowest legal marker
-    // QString::arg() understands, so a search query that itself contains
-    // "%1" cannot be substituted twice.
+    // The user-facing custom template uses "%s"; the built-in engines use
+    // "%1". The query is already percent encoded, so it can never contain a
+    // literal placeholder and a plain replace is safe.
+    if (queryUrl.contains(QLatin1String("%s"))) {
+        QString url = queryUrl;
+        url.replace(QLatin1String("%s"), query);
+        return url;
+    }
     return queryUrl.arg(query, QStringLiteral("%1"));
 }
 
@@ -45,6 +50,35 @@ SearchEngine SearchEngines::byId(const QString& id)
         }
     }
     return byId(defaultId());
+}
+
+bool SearchEngines::isValidCustomUrl(const QString& queryUrl)
+{
+    const QString trimmed = queryUrl.trimmed();
+    if (trimmed.isEmpty() || !trimmed.contains(QLatin1String("%s"))) {
+        return false;
+    }
+    // Probe with the placeholder removed so "%s" is never mistaken for a
+    // malformed percent escape.
+    QString probe = trimmed;
+    probe.replace(QLatin1String("%s"), QStringLiteral("yozora"));
+    const QUrl url(probe, QUrl::StrictMode);
+    if (!url.isValid() || url.host().isEmpty()) {
+        return false;
+    }
+    const QString scheme = url.scheme().toLower();
+    return scheme == QLatin1String("https") || scheme == QLatin1String("http");
+}
+
+SearchEngine SearchEngines::custom(const QString& name, const QString& queryUrl)
+{
+    SearchEngine engine;
+    engine.id = QLatin1String(kCustomId);
+    engine.name = name.trimmed().isEmpty() ? QStringLiteral("Custom") : name.trimmed();
+    if (isValidCustomUrl(queryUrl)) {
+        engine.queryUrl = queryUrl.trimmed();
+    }
+    return engine;
 }
 
 QString SearchEngines::defaultId()

@@ -29,6 +29,21 @@ QString AppPaths::logsDir()
     return userDataDir() + QStringLiteral("/logs");
 }
 
+QString AppPaths::privacyDir()
+{
+    return userDataDir() + QStringLiteral("/privacy");
+}
+
+QString AppPaths::trackerListPath()
+{
+    return privacyDir() + QStringLiteral("/blocklist.txt");
+}
+
+QString AppPaths::siteStoragePurgeMarker()
+{
+    return userDataDir() + QStringLiteral("/purge-site-storage.request");
+}
+
 QString AppPaths::appDir()
 {
     return QCoreApplication::applicationDirPath();
@@ -39,6 +54,7 @@ void AppPaths::ensureCreated()
     QDir().mkpath(userDataDir());
     QDir().mkpath(profileDir());
     QDir().mkpath(logsDir());
+    QDir().mkpath(privacyDir());
 }
 
 }  // namespace yozora

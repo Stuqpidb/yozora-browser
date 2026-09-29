@@ -134,6 +134,16 @@ QGroupBox::title {
 
 QLabel#hintLabel { color: %TEXT_MUTED%; }
 
+QLabel#privateBadge {
+    color: %ACCENT_TEXT%;
+    background: %ACCENT%;
+    border-radius: 7px;
+    padding: 2px 8px;
+    font-size: 10px;
+    font-weight: 700;
+    letter-spacing: 0.08em;
+}
+
 QPushButton {
     background: %SURFACE_HOVER%;
     border: 1px solid %BORDER%;

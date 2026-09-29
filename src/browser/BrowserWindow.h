@@ -16,6 +16,7 @@ namespace yozora {
 class BrowserTab;
 class DownloadManager;
 class NavigationBar;
+class PermissionManager;
 class Settings;
 class TabWidget;
 class UpdateChecker;
@@ -28,7 +29,11 @@ class BrowserWindow : public QMainWindow {
     Q_OBJECT
 
 public:
-    explicit BrowserWindow(WebProfile* profile, Settings* settings, QWidget* parent = nullptr);
+    // `privateMode` marks a window backed by an off-the-record profile. Such a
+    // window keeps nothing on disk and does not write window geometry back to
+    // settings.
+    explicit BrowserWindow(WebProfile* profile, Settings* settings, bool privateMode = false,
+                           QWidget* parent = nullptr);
     ~BrowserWindow() override;
 
     // --- tabs -------------------------------------------------------------
@@ -54,7 +59,11 @@ public:
 
     // --- window -----------------------------------------------------------
     void openNewWindow();
+    void openPrivateWindow();
     void showSettings();
+    void showClearBrowsingData();
+
+    [[nodiscard]] bool isPrivateMode() const { return m_private; }
 
 protected:
     void closeEvent(QCloseEvent* event) override;
@@ -72,6 +81,7 @@ private:
     void updateForActiveTab();
     void updateTabLabel(int index);
     void showStatusMessage(const QString& message);
+    void handleExternalProtocol(const QUrl& url, int navigationType);
     SessionSnapshot snapshot() const;
     void restoreSnapshot(const SessionSnapshot& snap);
     void applyTheme(bool dark);
@@ -80,6 +90,7 @@ private:
     WebProfile* m_profile = nullptr;
     Settings* m_settings = nullptr;
     UpdateChecker* m_updateChecker = nullptr;
+    PermissionManager* m_permissions = nullptr;
 
     NavigationBar* m_navBar = nullptr;
     TabWidget* m_tabWidget = nullptr;
@@ -87,6 +98,7 @@ private:
 
     QList<SessionSnapshot> m_closedTabs;
     QList<QPointer<QWidget>> m_devToolsWindows;
+    bool m_private = false;
     bool m_closing = false;
 };
 

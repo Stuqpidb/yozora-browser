@@ -21,6 +21,19 @@ public:
     // Where crash dumps and logs end up.
     [[nodiscard]] static QString logsDir();
 
+    // Local privacy data, currently just the optional user tracker blocklist.
+    [[nodiscard]] static QString privacyDir();
+
+    // Optional, user supplied tracker blocklist (same format as the bundled
+    // one). Never uploaded; it only extends the built-in list on this machine.
+    [[nodiscard]] static QString trackerListPath();
+
+    // Marker file whose presence asks the next start to wipe on-disk site
+    // storage (localStorage, IndexedDB, service workers) before the profile is
+    // created. Clearing those while Chromium is running is not supported, so
+    // the request is deferred to the next launch instead of faked.
+    [[nodiscard]] static QString siteStoragePurgeMarker();
+
     // Creates all directories above. Safe to call repeatedly.
     static void ensureCreated();
 

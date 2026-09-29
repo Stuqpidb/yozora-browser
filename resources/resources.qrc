@@ -11,4 +11,7 @@
         <file alias="yozora-128.png">icons/yozora-128.png</file>
         <file alias="yozora-256.png">icons/yozora-256.png</file>
     </qresource>
+    <qresource prefix="/privacy">
+        <file alias="trackers.txt">privacy/trackers.txt</file>
+    </qresource>
 </RCC>

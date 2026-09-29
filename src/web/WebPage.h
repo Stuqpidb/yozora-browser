@@ -9,6 +9,7 @@
 class QWebEngineProfile;
 class QWebEngineFullScreenRequest;
 class QWebEngineNewWindowRequest;
+class QWebEngineCertificateError;
 
 namespace yozora {
 
@@ -62,9 +63,20 @@ signals:
     // window.open() / target=_blank: the shell turns this into a new tab.
     void newWindowRequested(const QUrl& url, bool foreground);
 
+    // A link or page asked to open a scheme Yozora does not render itself
+    // (mailto:, tel:, magnet:, or anything unknown). The shell decides whether
+    // to hand it to the operating system; the engine never does so silently.
+    void externalProtocolRequested(const QUrl& url, int navigationType);
+
     void linkHovered(const QString& url);
     void fullScreenRequested(bool enabled);
     void renderProcessTerminatedUnexpectedly(int status);
+
+protected:
+    // Security gate for every navigation. Allows the schemes the engine renders
+    // itself, refuses file:// loaded by web content, and routes every other
+    // scheme to the shell instead of launching it silently.
+    bool acceptNavigationRequest(const QUrl& url, NavigationType type, bool isMainFrame) override;
 
 private:
     void onLoadingChanged(const QWebEngineLoadingInfo& info);
@@ -75,6 +87,7 @@ private:
     void onFullScreenRequest(QWebEngineFullScreenRequest request);
     void onNewWindowRequested(QWebEngineNewWindowRequest& request);
     void onRenderProcessTerminated(RenderProcessTerminationStatus status, int exitCode);
+    void onCertificateError(const QWebEngineCertificateError& error);
 
     // Decides whether a failed load deserves a Yozora error page, and shows it.
     void handleFailure(const QUrl& url, int errorDomain, int errorCode,

@@ -25,6 +25,16 @@ public:
     [[nodiscard]] static SearchEngine byId(const QString& id);
     [[nodiscard]] static QString defaultId();
 
+    // True when `queryUrl` can be used as a custom engine: it must be an
+    // absolute HTTPS/HTTP URL carrying a single "%s" placeholder. The "%s"
+    // marker (rather than "%1") keeps the templating obvious to the user, who
+    // types this value in by hand.
+    [[nodiscard]] static bool isValidCustomUrl(const QString& queryUrl);
+
+    // Builds a custom engine from user supplied values. Returns an engine with
+    // an empty queryUrl when the URL is not usable.
+    [[nodiscard]] static SearchEngine custom(const QString& name, const QString& queryUrl);
+
     // DuckDuckGo is the default: it does not require an API key and does not
     // track the user across sites.
     static constexpr auto kDuckDuckGoId = "duckduckgo";
@@ -32,6 +42,7 @@ public:
     static constexpr auto kBingId = "bing";
     static constexpr auto kBraveId = "brave";
     static constexpr auto kYandexId = "yandex";
+    static constexpr auto kCustomId = "custom";
 };
 
 }  // namespace yozora

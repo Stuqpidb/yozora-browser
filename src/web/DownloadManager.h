@@ -31,8 +31,9 @@ public:
     // The status strip; hidden when nothing is downloading.
     [[nodiscard]] QWidget* statusBar() const { return m_bar; }
 
-    // Opens the file with the OS default application.
-    static void openFile(const QString& path);
+    // Opens the file with the OS default application. Files that can execute
+    // code (exe, msi, bat, ...) are never opened without an explicit warning.
+    static void openFile(const QString& path, QWidget* parent = nullptr);
 
     // Opens the folder containing `path`, selecting the file when possible.
     static void revealInFolder(const QString& path);

@@ -2,10 +2,13 @@
 #include "web/DownloadManager.h"
 
 #include "core/Settings.h"
+#include "privacy/DownloadSafety.h"
 
 #include <QDesktopServices>
 #include <QDir>
+#include <QFileDialog>
 #include <QFileInfo>
+#include <QMessageBox>
 #include <QStandardPaths>
 #include <QFileInfo>
 #include <QHBoxLayout>
@@ -51,7 +54,7 @@ DownloadManager::DownloadManager(QWebEngineProfile* profile, yozora::Settings* s
     openButton->setVisible(false);
     connect(openButton, &QToolButton::clicked, this, [this] {
         for (auto it = m_files.cbegin(); it != m_files.cend(); ++it) {
-            openFile(it.value());
+            openFile(it.value(), m_bar->window());
             break;
         }
     });
@@ -99,18 +102,37 @@ void DownloadManager::onDownloadRequested(QWebEngineDownloadRequest* request)
         directory = QStandardPaths::writableLocation(QStandardPaths::DownloadLocation);
     }
 
-    QString fileName = request->downloadFileName();
-    if (fileName.isEmpty()) {
-        fileName = request->suggestedFileName();
+    QString suggested = request->downloadFileName();
+    if (suggested.isEmpty()) {
+        suggested = request->suggestedFileName();
     }
-    if (fileName.isEmpty()) {
-        fileName = QStringLiteral("download");
+    // The name comes from the remote server, so it is sanitised before it can
+    // touch the filesystem: no path separators, no "..", no control characters,
+    // no reserved device names.
+    QString fileName = downloads::sanitizeFileName(suggested);
+
+    if (m_settings && m_settings->askWhereToSave()) {
+        const QString chosen = QFileDialog::getSaveFileName(
+            m_bar->window(), tr("Save file"), QDir(directory).filePath(fileName));
+        if (chosen.isEmpty()) {
+            request->cancel();
+            request->deleteLater();
+            return;
+        }
+        const QFileInfo info(chosen);
+        directory = info.absolutePath();
+        fileName = info.fileName();
+    } else {
+        // Never overwrite silently: pick a free name next to the existing file.
+        const QFileInfo info(downloads::uniquePath(directory, fileName));
+        directory = info.absolutePath();
+        fileName = info.fileName();
     }
 
     request->setDownloadDirectory(directory);
     request->setDownloadFileName(fileName);
 
-    m_files.insert(request, directory + QLatin1Char('/') + fileName);
+    m_files.insert(request, QDir(directory).filePath(fileName));
 
     connect(request, &QWebEngineDownloadRequest::stateChanged, this,
             [this, request](QWebEngineDownloadRequest::DownloadState) {
@@ -196,10 +218,23 @@ void DownloadManager::resetBar()
     m_progress->setValue(0);
 }
 
-void DownloadManager::openFile(const QString& path)
+void DownloadManager::openFile(const QString& path, QWidget* parent)
 {
     if (path.isEmpty() || !QFileInfo::exists(path)) {
         return;
+    }
+    // A downloaded program is never launched automatically. Handing it to the
+    // OS by hand is allowed, but only after an explicit warning.
+    if (downloads::isDangerousFile(path)) {
+        const auto answer = QMessageBox::warning(
+            parent, tr("Open executable file?"),
+            tr("\"%1\" is a program or installer. Running it can harm your computer."
+               "\n\nOpen it only if you trust the site it came from.")
+                .arg(QFileInfo(path).fileName()),
+            QMessageBox::Open | QMessageBox::Cancel, QMessageBox::Cancel);
+        if (answer != QMessageBox::Open) {
+            return;
+        }
     }
     QDesktopServices::openUrl(QUrl::fromLocalFile(path));
 }

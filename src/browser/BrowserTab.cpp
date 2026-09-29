@@ -186,7 +186,8 @@ void BrowserTab::loadInput(const QString& text, bool isSearch)
 {
     if (isSearch) {
         const auto engine =
-            SearchEngines::byId(m_settings ? m_settings->searchEngineId() : QString());
+            m_settings ? m_settings->searchEngine()
+                       : SearchEngines::byId(SearchEngines::defaultId());
         const QString query = url::toSearchQuery(text);
         const QString target = engine.urlForQuery(query);
         if (target.isEmpty()) {
@@ -251,7 +252,8 @@ void BrowserTab::setDarkMode(bool dark)
 void BrowserTab::updateSearchEngineUi()
 {
     const auto engine =
-        SearchEngines::byId(m_settings ? m_settings->searchEngineId() : QString());
+        m_settings ? m_settings->searchEngine()
+                   : SearchEngines::byId(SearchEngines::defaultId());
     m_startPage->setSearchEngineName(engine.name);
     m_startPage->setSearchEnginePlaceholder(tr("Search the web with %1").arg(engine.name));
 }

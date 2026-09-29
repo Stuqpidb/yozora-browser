@@ -5,6 +5,7 @@
 
 #include <QFile>
 #include <QLoggingCategory>
+#include <QSet>
 #include <QWebEngineCertificateError>
 #include <QWebEngineFullScreenRequest>
 #include <QWebEngineNewWindowRequest>
@@ -29,6 +30,7 @@ WebPage::WebPage(QWebEngineProfile* profile, QObject* parent)
     connect(this, &QWebEnginePage::newWindowRequested, this, &WebPage::onNewWindowRequested);
     connect(this, &QWebEnginePage::renderProcessTerminated, this,
             &WebPage::onRenderProcessTerminated);
+    connect(this, &QWebEnginePage::certificateError, this, &WebPage::onCertificateError);
 }
 
 void WebPage::setErrorPageEnabled(bool enabled)
@@ -196,6 +198,59 @@ void WebPage::onRenderProcessTerminated(RenderProcessTerminationStatus status, i
     // The renderer crashed. Reloading is the only sane recovery in the MVP.
     emit renderProcessTerminatedUnexpectedly(static_cast<int>(status));
     triggerAction(QWebEnginePage::Reload);
+}
+
+bool WebPage::acceptNavigationRequest(const QUrl& url, NavigationType type, bool isMainFrame)
+{
+    const QString scheme = url.scheme().toLower();
+
+    // A URL without a scheme is resolved by the engine; leave it alone.
+    if (scheme.isEmpty()) {
+        return QWebEnginePage::acceptNavigationRequest(url, type, isMainFrame);
+    }
+
+    // Schemes the engine renders itself. This list is a deliberate allowlist:
+    // anything not on it is treated as an external protocol.
+    static const QSet<QString> webSchemes = {
+        QStringLiteral("http"),       QStringLiteral("https"),
+        QStringLiteral("ws"),         QStringLiteral("wss"),
+        QStringLiteral("ftp"),        QStringLiteral("about"),
+        QStringLiteral("data"),       QStringLiteral("blob"),
+        QStringLiteral("qrc"),        QStringLiteral("yozora-error"),
+        QStringLiteral("javascript"), QStringLiteral("view-source"),
+    };
+    if (webSchemes.contains(scheme)) {
+        return QWebEnginePage::acceptNavigationRequest(url, type, isMainFrame);
+    }
+
+    // Web content must not be able to read the user's local files. A file URL
+    // is only allowed when the user typed it (or navigated back to it), never
+    // when a page linked to it, redirected to it or framed it.
+    if (scheme == QLatin1String("file")) {
+        const bool userInitiated =
+            (type == NavigationTypeTyped || type == NavigationTypeBackForward);
+        if (userInitiated && isMainFrame) {
+            return QWebEnginePage::acceptNavigationRequest(url, type, isMainFrame);
+        }
+        return false;
+    }
+
+    // Everything else (mailto:, tel:, magnet:, unknown custom schemes): never
+    // launched silently. The shell asks the user first.
+    emit externalProtocolRequested(url, static_cast<int>(type));
+    return false;
+}
+
+void WebPage::onCertificateError(const QWebEngineCertificateError& error)
+{
+    // Yozora never ignores a certificate error. Leaving the object untouched
+    // means Chromium rejects the connection (the default), so the page fails
+    // and the Yozora error page explains it. acceptCertificate() is never
+    // called anywhere in the code base.
+    const QByteArray url = error.url().toString().toUtf8();
+    const QByteArray description = error.description().toUtf8();
+    qCWarning(lcWebPage, "Rejecting certificate error for %s: %s", url.constData(),
+              description.constData());
 }
 
 }  // namespace yozora

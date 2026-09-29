@@ -29,6 +29,9 @@ public:
     // Wordmark shown at the far left, e.g. "Yozora 0.1.0".
     void setBrand(const QString& name, const QString& version);
 
+    // Shows or hides the "PRIVATE" badge for private browsing windows.
+    void setPrivateMode(bool enabled);
+
     void setCanGoBack(bool can);
     void setCanGoForward(bool can);
     void setLoading(bool loading);
@@ -51,6 +54,7 @@ private:
 
     QHBoxLayout* m_layout = nullptr;
     QLabel* m_brandLabel = nullptr;
+    QLabel* m_privateBadge = nullptr;
     QToolButton* m_backButton = nullptr;
     QToolButton* m_forwardButton = nullptr;
     QToolButton* m_reloadButton = nullptr;
