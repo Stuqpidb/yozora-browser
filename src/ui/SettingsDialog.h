@@ -38,6 +38,10 @@ private:
     void chooseDownloadDirectory();
 
     Settings* m_settings = nullptr;
+    // True while loadFromSettings() fills the widgets. Without it, the
+    // programmatic setChecked()/setCurrentIndex() calls look like user edits
+    // and write half-loaded values back into Settings.
+    bool m_loading = false;
 
     QComboBox* m_searchEngine = nullptr;
     QLineEdit* m_homePage = nullptr;

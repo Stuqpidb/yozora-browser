@@ -21,7 +21,9 @@
 #include <QApplication>
 #include <QCloseEvent>
 #include <QDesktopServices>
+#include <QFile>
 #include <QFileInfo>
+#include <QIODevice>
 #include <QMenu>
 #include <QMessageBox>
 #include <QPointer>
@@ -110,7 +112,17 @@ void BrowserWindow::buildUi()
     connect(m_tabWidget, &QTabWidget::currentChanged, this, [this](int) { updateForActiveTab(); });
 
     connect(m_downloads, &DownloadManager::downloadStarted, this,
-            [this](const QString& name) { showStatusMessage(tr("Downloading %1").arg(name)); });
+            [this](const QString& name) {
+                // A navigation that turned into a download leaves the view
+                // blank; show the start page again instead of an empty frame.
+                if (auto* tab = currentTab()) {
+                    if (!tab->isStartPage() && tab->view()
+                        && tab->view()->url().scheme() == QLatin1String("about")) {
+                        tab->showStartPage();
+                    }
+                }
+                showStatusMessage(tr("Downloading %1").arg(name));
+            });
     connect(m_downloads, &DownloadManager::downloadFinished, this, [this](const QString& path) {
         showStatusMessage(tr("Downloaded %1")
                               .arg(QFileInfo(path).fileName()));

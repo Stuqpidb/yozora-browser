@@ -243,25 +243,28 @@ QWidget* SettingsDialog::buildAboutSection()
 
 void SettingsDialog::loadFromSettings()
 {
-    if (!m_settings) {
-        return;
+    m_loading = true;
+
+    if (m_settings) {
+        const int index = m_searchEngine->findData(m_settings->searchEngineId());
+        m_searchEngine->setCurrentIndex(index >= 0 ? index : 0);
+
+        m_homePage->setText(m_settings->homePage());
+        m_downloadDir->setText(m_settings->downloadDirectory());
+        m_askWhereToSave->setChecked(m_settings->askWhereToSave());
+        m_restoreSession->setChecked(m_settings->restoreSessionOnStart());
+
+        const bool dark = m_settings->themeMode() != Settings::ThemeMode::Light;
+        m_darkTheme->setChecked(dark);
+        m_lightTheme->setChecked(!dark);
     }
-    const int index = m_searchEngine->findData(m_settings->searchEngineId());
-    m_searchEngine->setCurrentIndex(index >= 0 ? index : 0);
 
-    m_homePage->setText(m_settings->homePage());
-    m_downloadDir->setText(m_settings->downloadDirectory());
-    m_askWhereToSave->setChecked(m_settings->askWhereToSave());
-    m_restoreSession->setChecked(m_settings->restoreSessionOnStart());
-
-    const bool dark = m_settings->themeMode() != Settings::ThemeMode::Light;
-    m_darkTheme->setChecked(dark);
-    m_lightTheme->setChecked(!dark);
+    m_loading = false;
 }
 
 void SettingsDialog::applyToSettings()
 {
-    if (!m_settings) {
+    if (m_loading || !m_settings) {
         return;
     }
     m_settings->setSearchEngineId(m_searchEngine->currentData().toString());

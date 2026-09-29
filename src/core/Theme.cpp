@@ -111,6 +111,40 @@ QWidget {
     font-size: 13px;
 }
 
+/* ---- Dialogs ------------------------------------------------------------ */
+QDialog {
+    background: %BACKGROUND%;
+}
+
+QGroupBox {
+    background: %SURFACE%;
+    border: 1px solid %BORDER%;
+    border-radius: 10px;
+    margin-top: 14px;
+    padding: 16px 14px 14px 14px;
+}
+
+QGroupBox::title {
+    subcontrol-origin: margin;
+    subcontrol-position: top left;
+    left: 14px;
+    padding: 0 6px;
+    color: %TEXT%;
+}
+
+QLabel#hintLabel { color: %TEXT_MUTED%; }
+
+QPushButton {
+    background: %SURFACE_HOVER%;
+    border: 1px solid %BORDER%;
+    border-radius: 7px;
+    padding: 6px 16px;
+}
+
+QPushButton:hover { background: %SURFACE_ACTIVE%; }
+QPushButton:default { border-color: %ACCENT%; }
+QPushButton:disabled { color: %TEXT_MUTED%; background: %SURFACE%; }
+
 QToolTip {
     background: %SURFACE%;
     color: %TEXT%;

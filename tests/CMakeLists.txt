@@ -7,6 +7,7 @@
 set(YOZORA_TESTS
     tst_urlutils
     tst_tabwidget
+    tst_errorpage
 )
 
 # Qt's shared libraries live next to the Qt installation, not next to the test

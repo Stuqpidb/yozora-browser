@@ -3,6 +3,7 @@
 
 #include "web/ErrorPage.h"
 
+#include <QFile>
 #include <QLoggingCategory>
 #include <QWebEngineCertificateError>
 #include <QWebEngineFullScreenRequest>
@@ -55,6 +56,7 @@ void WebPage::loadUrl(const QUrl& url)
                       -300, QStringLiteral("The address is not valid."));
         return;
     }
+    m_requestedUrl = url;
     load(url);
 }
 
@@ -73,6 +75,14 @@ void WebPage::handleFailure(const QUrl& url, int errorDomain, int errorCode,
                             const QString& errorText)
 {
     if (!m_errorPageEnabled || m_showingErrorPage) {
+        return;
+    }
+    // about:blank is the document every page starts with; a "failure" for it is
+    // never something the user asked to open. A navigation that turned into a
+    // download also ends here, and that must not be reported as a broken page.
+    if (url.isEmpty() || url.scheme() == QLatin1String("about")
+        || url.scheme() == QLatin1String("yozora-error")
+        || url.scheme() == QLatin1String("data")) {
         return;
     }
     showErrorPage(url, errorDomain, errorCode, errorText);
@@ -137,12 +147,13 @@ void WebPage::onLoadFinished(bool ok)
     if (!m_errorPageEnabled || m_showingErrorPage) {
         return;
     }
-    const QUrl requested = url();
-    if (requested.scheme() == QLatin1String("yozora-error") || requested.isEmpty()) {
+    const QUrl current = url();
+    if (!m_requestedUrl.isEmpty() && current != m_requestedUrl) {
+        // A redirect or a superseded request failed, not the page in front.
         return;
     }
-    handleFailure(requested, static_cast<int>(QWebEngineLoadingInfo::ErrorDomain::NoErrorDomain),
-                  0, QString());
+    handleFailure(current, static_cast<int>(QWebEngineLoadingInfo::ErrorDomain::NoErrorDomain), 0,
+                  QString());
 }
 
 void WebPage::onTitleChanged(const QString& title)

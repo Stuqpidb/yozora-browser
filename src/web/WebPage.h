@@ -81,6 +81,7 @@ private:
                        const QString& errorText);
 
     QIcon m_lastIcon;
+    QUrl m_requestedUrl;
     QUrl m_errorUrl;
     QString m_errorTitle;
     bool m_errorPageEnabled = true;
