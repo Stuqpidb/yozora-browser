@@ -74,6 +74,7 @@ installer/*.exe
 
 # Runtime / local data (never commit user data or profiles)
 *.log
+aqtinstall.log
 profile/
 user-data/
 cookies.sqlite
