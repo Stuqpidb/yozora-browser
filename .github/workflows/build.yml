@@ -1,0 +1,85 @@
+# ---------------------------------------------------------------------------
+# Yozora Browser - private CI
+#
+# This workflow never publishes anything. It builds and tests, and stores the
+# installer as a workflow artifact for the maintainer to download. Creating a
+# GitHub Release is a separate, manual action.
+# ---------------------------------------------------------------------------
+name: build
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  QT_VERSION: "6.8.3"
+  QT_ARCH: "win64_msvc2022_64"
+
+jobs:
+  build:
+    name: Windows build and tests
+    runs-on: windows-2022
+    timeout-minutes: 60
+
+    steps:
+      - name: Check out the source
+        uses: actions/checkout@v4
+
+      - name: Set up Python (for cmake, ninja, aqtinstall)
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install build tools
+        run: python -m pip install --upgrade cmake ninja aqtinstall
+
+      # The official Qt online installer needs an account, so the CI uses
+      # aqtinstall to fetch the same prebuilt binaries from download.qt.io.
+      - name: Install Qt ${{ env.QT_VERSION }}
+        shell: pwsh
+        run: |
+          aqt install-qt windows desktop ${{ env.QT_VERSION }} ${{ env.QT_ARCH }} `
+            -m qtwebengine qtwebchannel qtpositioning qtimageformats `
+            --outputdir "${{ runner.temp }}/Qt"
+          "Qt_DIR=${{ runner.temp }}/Qt/${{ env.QT_VERSION }}/msvc2022_64/lib/cmake/Qt6" `
+            >> $env:GITHUB_ENV
+
+      - name: Configure
+        run: >
+          cmake -S . -B build
+          -G Ninja
+          -DCMAKE_BUILD_TYPE=Release
+          -DCMAKE_PREFIX_PATH="${{ runner.temp }}/Qt/${{ env.QT_VERSION }}/msvc2022_64"
+          -DYOZORA_BUILD_TESTS=ON
+
+      - name: Build
+        run: cmake --build build --config Release
+
+      - name: Test
+        run: ctest --test-dir build --output-on-failure -C Release
+
+      - name: Stage a runnable build
+        run: cmake --install build --config Release --prefix "${{ github.workspace }}/dist"
+
+      # NSIS ships with the GitHub Windows runners, so the installer is built
+      # with CPack exactly the way it is built locally.
+      - name: Build the installer
+        shell: pwsh
+        run: |
+          cmake -S . -B build -DCPACK_INSTALL_PREFIX="${{ github.workspace }}/dist"
+          cmake --build build --target package --config Release
+
+      - name: Upload the installer
+        uses: actions/upload-artifact@v4
+        with:
+          name: YozoraSetup-${{ github.sha }}
+          path: build/YozoraSetup-*.exe
+          if-no-files-found: error
+          retention-days: 14

@@ -1,0 +1,32 @@
+// SPDX-License-Identifier: MIT
+#pragma once
+
+#include <QString>
+
+namespace yozora {
+
+// Central place for every filesystem location Yozora uses. Keeping it here
+// means the on-disk layout can change without touching call sites, and makes
+// it obvious what is user data (and therefore must never be committed).
+class AppPaths {
+public:
+    // Root of the persistent user data directory, e.g.
+    // %LOCALAPPDATA%\Yozora\Yozora Browser
+    [[nodiscard]] static QString userDataDir();
+
+    // Chromium profile directory handed to QWebEngineProfile (cookies,
+    // localStorage, cache, service workers).
+    [[nodiscard]] static QString profileDir();
+
+    // Where crash dumps and logs end up.
+    [[nodiscard]] static QString logsDir();
+
+    // Creates all directories above. Safe to call repeatedly.
+    static void ensureCreated();
+
+    // Directory the application was started from - used to locate bundled
+    // resources in a portable installation.
+    [[nodiscard]] static QString appDir();
+};
+
+}  // namespace yozora

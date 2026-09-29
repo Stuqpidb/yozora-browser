@@ -1,0 +1,14 @@
+<!DOCTYPE RCC>
+<RCC version="1.0">
+    <qresource prefix="/icons">
+        <file alias="yozora.svg">icons/yozora.svg</file>
+        <file alias="yozora.png">icons/yozora.png</file>
+        <file alias="yozora-16.png">icons/yozora-16.png</file>
+        <file alias="yozora-24.png">icons/yozora-24.png</file>
+        <file alias="yozora-32.png">icons/yozora-32.png</file>
+        <file alias="yozora-48.png">icons/yozora-48.png</file>
+        <file alias="yozora-64.png">icons/yozora-64.png</file>
+        <file alias="yozora-128.png">icons/yozora-128.png</file>
+        <file alias="yozora-256.png">icons/yozora-256.png</file>
+    </qresource>
+</RCC>

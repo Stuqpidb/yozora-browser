@@ -1,0 +1,130 @@
+# ---------------------------------------------------------------------------
+# Yozora Browser - gitignore
+# Created BEFORE the first commit, so that no build output or secret ever
+# reaches the repository.
+# ---------------------------------------------------------------------------
+
+# Build output
+build/
+build-*/
+dist/
+out/
+cmake-build-*/
+CMakeUserPresets.json
+CMakeCache.txt
+CMakeFiles/
+CMakeScripts/
+_deps/
+install_manifest.txt
+install.log
+compile_commands.json
+CTestTestfile.cmake
+Testing/
+*.ninja
+.ninja_deps
+.ninja_log
+
+# Qt generated / moc
+*_autogen/
+moc_*.cpp
+moc_*.h
+qrc_*.cpp
+ui_*.h
+.qmake.stash
+*.qmlc
+Makefile
+Makefile.Debug
+Makefile.Release
+*.pro.user
+*.pro.user.*
+
+# Visual Studio / MSVC
+.vs/
+*.sdf
+*.opensdf
+*.VC.db
+*.VC.opendb
+*.aps
+*.ncb
+ipch/
+
+# Compiled artefacts
+*.o
+*.obj
+*.a
+*.lib
+*.so
+*.so.*
+*.dylib
+*.dll
+*.exe
+*.pdb
+*.ilk
+*.exp
+*.idb
+*.res
+*.manifest
+
+# Installer output
+installer/build/
+installer/*.exe
+*.msi
+*.msix
+*.appx
+
+# Runtime / local data (never commit user data or profiles)
+*.log
+profile/
+user-data/
+cookies.sqlite
+History
+History-journal
+Login Data
+Login Data-journal
+Local State
+Web Data
+Web Data-journal
+Network Persistent State
+Bookmarks
+Preferences
+Favicons
+favicons.db
+sessions/
+Cache/
+Code Cache/
+GPUCache/
+DawnCache/
+Service Worker/
+blob_storage/
+Local Storage/
+Session Storage/
+IndexedDB/
+databases/
+crashpad/
+
+# Secrets - must never be committed
+.env
+.env.*
+*.pem
+*.key
+*.p12
+*.pfx
+*.keystore
+secrets.json
+secrets/
+credentials.json
+*_rsa
+*_ed25519
+id_rsa
+id_ed25519
+
+# Editors / OS
+.idea/
+.vscode/
+*.swp
+*.swo
+*~
+.DS_Store
+Thumbs.db
+desktop.ini
+$RECYCLE.BIN/
