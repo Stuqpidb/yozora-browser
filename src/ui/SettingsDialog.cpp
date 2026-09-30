@@ -20,7 +20,6 @@
 #include <QLineEdit>
 #include <QListWidget>
 #include <QPushButton>
-#include <QRadioButton>
 #include <QStackedWidget>
 #include <QTabWidget>
 #include <QVBoxLayout>
@@ -81,7 +80,7 @@ SettingsDialog::SettingsDialog(Settings* settings, WebProfile* profile, QWidget*
         {tr("Startup"), buildStartupSection()},
         {tr("Downloads"), buildDownloadsSection()},
         {tr("Privacy"), buildPrivacySection()},
-        {tr("Appearance"), buildAppearanceSection()},
+        {tr("Scrolling"), buildScrollingSection()},
         {tr("Data"), buildDataSection()},
         {tr("About"), buildAboutSection()},
     };
@@ -114,8 +113,6 @@ SettingsDialog::SettingsDialog(Settings* settings, WebProfile* profile, QWidget*
     connect(m_homePage, &QLineEdit::editingFinished, this, &SettingsDialog::applyToSettings);
     connect(m_askWhereToSave, &QCheckBox::toggled, this, &SettingsDialog::applyToSettings);
     connect(m_restoreSession, &QCheckBox::toggled, this, &SettingsDialog::applyToSettings);
-    connect(m_darkTheme, &QRadioButton::toggled, this, &SettingsDialog::applyToSettings);
-    connect(m_lightTheme, &QRadioButton::toggled, this, &SettingsDialog::applyToSettings);
     connect(m_scrollMode, &QComboBox::currentIndexChanged, this, [this](int) {
         applyToSettings();
     });
@@ -293,27 +290,16 @@ QWidget* SettingsDialog::buildPrivacySection()
     return page;
 }
 
-QWidget* SettingsDialog::buildAppearanceSection()
+QWidget* SettingsDialog::buildScrollingSection()
 {
     auto* page = new QWidget(this);
     auto* layout = new QVBoxLayout(page);
     layout->setContentsMargins(22, 22, 22, 22);
     layout->setSpacing(12);
 
-    auto* box = new QGroupBox(tr("Theme"), page);
-    auto* boxLayout = new QVBoxLayout(box);
-
-    m_darkTheme = new QRadioButton(tr("Dark (night sky)"), box);
-    m_lightTheme = new QRadioButton(tr("Light"), box);
-    boxLayout->addWidget(m_darkTheme);
-    boxLayout->addWidget(m_lightTheme);
-    boxLayout->addStretch(1);
-
-    layout->addWidget(box);
-
-    auto* scrollBox = new QGroupBox(tr("Scrolling"), page);
-    auto* scrollLayout = new QVBoxLayout(scrollBox);
-    m_scrollMode = new QComboBox(scrollBox);
+    auto* box = new QGroupBox(tr("Scrolling"), page);
+    auto* scrollLayout = new QVBoxLayout(box);
+    m_scrollMode = new QComboBox(box);
     m_scrollMode->addItem(tr("Fast (recommended)"),
                           static_cast<int>(Settings::ScrollMode::Fast));
     m_scrollMode->addItem(tr("Instant"), static_cast<int>(Settings::ScrollMode::Instant));
@@ -324,8 +310,8 @@ QWidget* SettingsDialog::buildAppearanceSection()
                                     "without the engine's slow easing.\n\"Instant\" jumps "
                                     "straight to the new position.\n\"Smooth\" uses the "
                                     "engine's own animation."),
-                                 scrollBox));
-    layout->addWidget(scrollBox);
+                                 box));
+    layout->addWidget(box);
 
     layout->addStretch(1);
     return page;
@@ -442,10 +428,6 @@ void SettingsDialog::loadFromSettings()
         m_notifications->setChecked(m_settings->notificationsEnabled());
         m_webrtcPolicy->setCurrentIndex(static_cast<int>(m_settings->webrtcPolicy()));
 
-        const bool dark = m_settings->themeMode() != Settings::ThemeMode::Light;
-        m_darkTheme->setChecked(dark);
-        m_lightTheme->setChecked(!dark);
-
         m_scrollMode->setCurrentIndex(
             m_scrollMode->findData(static_cast<int>(m_settings->scrollMode())));
     }
@@ -468,8 +450,6 @@ void SettingsDialog::applyToSettings()
     m_settings->setHomePage(m_homePage->text().trimmed());
     m_settings->setAskWhereToSave(m_askWhereToSave->isChecked());
     m_settings->setRestoreSessionOnStart(m_restoreSession->isChecked());
-    m_settings->setThemeMode(m_darkTheme->isChecked() ? Settings::ThemeMode::Dark
-                                                       : Settings::ThemeMode::Light);
     m_settings->setScrollMode(static_cast<Settings::ScrollMode>(m_scrollMode->currentData().toInt()));
 
     m_settings->setBlockThirdPartyCookies(m_blockThirdPartyCookies->isChecked());

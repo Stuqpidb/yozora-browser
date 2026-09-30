@@ -48,6 +48,9 @@ public:
     void setRadius(qreal radius);
     // A larger field for the start page: bigger icons, more padding.
     void setHeroMode(bool hero);
+    // Reserves empty space around the surface for its outer shadow. The panel is
+    // inset by this much, so the caller has to size the widget accordingly.
+    void setShadowMargin(qreal margin);
 
     void setFocusPolicy(Qt::FocusPolicy policy);
     void setCursorPosition(int position);
@@ -70,12 +73,15 @@ private:
     void layoutEditor();
     [[nodiscard]] qreal iconSize() const;
     [[nodiscard]] QRectF trailingBox() const;
+    // The pill itself: the widget rect minus the shadow margin.
+    [[nodiscard]] QRectF surfaceRect() const;
     void drawIcon(QPainter& painter, icons::Shape shape, const QRectF& box,
                   const QColor& color) const;
 
     QLineEdit* m_editor = nullptr;
     Trailing m_trailing = Trailing::Arrow;
     qreal m_radius = 19.0;
+    qreal m_margin = 0.0;
     bool m_hero = false;
 };
 

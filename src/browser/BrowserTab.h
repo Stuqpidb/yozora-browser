@@ -1,8 +1,6 @@
 // SPDX-License-Identifier: MIT
 #pragma once
 
-#include "home/HomeWidget.h"
-
 #include <QIcon>
 #include <QString>
 #include <QStringList>
@@ -14,14 +12,15 @@ class QWebEngineProfile;
 
 namespace yozora {
 
+class HistoryStore;
 class HomePage;
 class Settings;
 class WebPage;
 class WebView;
 
-// One browser tab: either the Yozora home page (widget dashboard) or a web
-// page. The home page is a native widget, so it appears instantly and needs no
-// bridge between C++ and the renderer.
+// One browser tab: either the Yozora start page or a web page. The start page is
+// a native widget, so it appears instantly and needs no bridge between C++ and
+// the renderer.
 class BrowserTab : public QWidget {
     Q_OBJECT
 
@@ -32,7 +31,7 @@ public:
     // The pseudo-scheme that means "show the Yozora home page".
     static QUrl startPageUrl();
 
-    BrowserTab(QWebEngineProfile* profile, Settings* settings, const HomeContext& context,
+    BrowserTab(QWebEngineProfile* profile, Settings* settings, HistoryStore* history,
                QWidget* parent = nullptr);
     ~BrowserTab() override;
 
@@ -58,7 +57,6 @@ public:
     [[nodiscard]] WebView* view() const { return m_view; }
     [[nodiscard]] HomePage* homePage() const { return m_home; }
 
-    void setDarkMode(bool dark);
     void updateSearchEngineUi() {}
 
     // URLs currently open in this tab, used for session restore.
@@ -83,10 +81,9 @@ private:
     HomePage* m_home = nullptr;
     WebView* m_view = nullptr;
     Settings* m_settings = nullptr;
-    HomeContext m_context;
+    HistoryStore* m_history = nullptr;
     QString m_lastTitle;
     QUrl m_lastUrl;
-    bool m_dark = true;
 };
 
 }  // namespace yozora

@@ -23,7 +23,7 @@ void strokePath(QPainter& painter, const QPainterPath& path, const QPen& pen)
     painter.drawPath(path);
 }
 
-void drawIcon(QPainter& painter, RailIcon icon, const QRectF& box, const QColor& line, bool dark)
+void drawIcon(QPainter& painter, RailIcon icon, const QRectF& box, const QColor& line)
 {
     QPen pen(line, kStroke);
     pen.setCapStyle(Qt::RoundCap);
@@ -109,49 +109,6 @@ void drawIcon(QPainter& painter, RailIcon icon, const QRectF& box, const QColor&
             strokePath(painter, crease, pen);
             break;
         }
-        case RailIcon::Sun: {
-            painter.save();
-            painter.setBrush(line);
-            painter.setPen(Qt::NoPen);
-            painter.drawEllipse(c, 4.2, 4.2);
-            painter.restore();
-            for (int i = 0; i < 8; ++i) {
-                const qreal angle = i * M_PI / 4.0;
-                QPainterPath ray;
-                ray.moveTo(c.x() + std::cos(angle) * 7.4, c.y() + std::sin(angle) * 7.4);
-                ray.lineTo(c.x() + std::cos(angle) * 10.4, c.y() + std::sin(angle) * 10.4);
-                strokePath(painter, ray, pen);
-            }
-            break;
-        }
-        case RailIcon::Moon: {
-            // A real crescent: two circular arcs closed into one outline and
-            // filled. Punching a disc out of a drawn shape would leave the
-            // outline of the shape visible through the hole, because the
-            // rail background is translucent glass, not a flat colour.
-            const qreal r = 9.0;
-            const QPointF mid = box.center();
-            const QPointF hole = mid + QPointF(4.6, -3.2);
-            const qreal holeR = 8.2;
-
-            QPainterPath crescent;
-            // Outer edge, counter-clockwise from the top-left of the disc.
-            const qreal startAngle = 132;
-            crescent.arcMoveTo(QRectF(mid.x() - r, mid.y() - r, 2 * r, 2 * r), startAngle);
-            crescent.arcTo(QRectF(mid.x() - r, mid.y() - r, 2 * r, 2 * r), startAngle, 236);
-            // Inner edge, back the other way: the bite taken out of the moon.
-            const qreal endAngle = startAngle + 236;
-            crescent.arcTo(QRectF(hole.x() - holeR, hole.y() - holeR, 2 * holeR, 2 * holeR),
-                           endAngle, -124);
-            crescent.closeSubpath();
-
-            painter.save();
-            painter.setPen(Qt::NoPen);
-            painter.setBrush(line);
-            painter.drawPath(crescent);
-            painter.restore();
-            break;
-        }
         case RailIcon::Settings: {
             QPainterPath gear;
             const int teeth = 8;
@@ -190,18 +147,11 @@ RailButton::RailButton(RailIcon icon, const QString& tooltip, QWidget* parent)
     setFocusPolicy(Qt::NoFocus);
     setCursor(Qt::PointingHandCursor);
     setAttribute(Qt::WA_Hover, true);
-    m_dark = Theme::isDark();
 }
 
 void RailButton::setIcon(RailIcon icon)
 {
     m_icon = icon;
-    update();
-}
-
-void RailButton::setDarkTheme(bool dark)
-{
-    m_dark = dark;
     update();
 }
 
@@ -216,7 +166,7 @@ void RailButton::paintEvent(QPaintEvent* event)
     QPainter painter(this);
     painter.setRenderHint(QPainter::Antialiasing, true);
 
-    const auto c = m_dark ? Theme::darkColors() : Theme::lightColors();
+    const auto c = Theme::colors();
     const QRectF pill = QRectF(rect()).adjusted(1, 1, -1, -1);
     const bool on = isChecked();
     const bool hover = underMouse();
@@ -224,12 +174,12 @@ void RailButton::paintEvent(QPaintEvent* event)
     // The active item gets a real glass pill with the accent showing through,
     // so the current location is obvious at a glance.
     if (on || hover) {
-        Glass::Recipe glass = Glass::recipe(m_dark, pill.width() / 2.0);
+        Glass::Recipe glass = Glass::recipe(pill.width() / 2.0);
         if (on) {
             const QColor accent(c.accent);
-            glass.fill = QColor(accent.red(), accent.green(), accent.blue(), m_dark ? 46 : 38);
-            glass.fillTop = QColor(accent.red(), accent.green(), accent.blue(), m_dark ? 64 : 52);
-            glass.stroke = QColor(accent.red(), accent.green(), accent.blue(), m_dark ? 120 : 90);
+            glass.fill = QColor(accent.red(), accent.green(), accent.blue(), 46);
+            glass.fillTop = QColor(accent.red(), accent.green(), accent.blue(), 64);
+            glass.stroke = QColor(accent.red(), accent.green(), accent.blue(), 120);
         }
         Glass::paintPanel(painter, pill, glass, 1.0);
     }
@@ -240,7 +190,7 @@ void RailButton::paintEvent(QPaintEvent* event)
     }
 
     const QRectF box((width() - kBox) / 2.0, (height() - kBox) / 2.0, kBox, kBox);
-    drawIcon(painter, m_icon, box, line, m_dark);
+    drawIcon(painter, m_icon, box, line);
 }
 
 }  // namespace yozora

@@ -72,14 +72,12 @@ BrowserWindow::BrowserWindow(WebProfile* profile, Settings* settings, BookmarkSt
         m_navBar->setPrivateMode(true);
     }
 
-    connect(m_settings, &Settings::themeModeChanged, this, [this] { applyTheme(isDark()); });
     connect(m_settings, &Settings::searchEngineChanged, this, [this] {
         if (auto* tab = currentTab()) {
             tab->updateSearchEngineUi();
         }
     });
 
-    applyTheme(isDark());
     newTab();
 
     const QByteArray geometry = m_settings->windowGeometry();
@@ -142,10 +140,6 @@ void BrowserWindow::buildUi()
     });
     connect(m_sideBar, &SideBar::privateRequested, this, &BrowserWindow::openPrivateWindow);
     connect(m_sideBar, &SideBar::settingsRequested, this, &BrowserWindow::showSettings);
-    connect(m_sideBar, &SideBar::themeToggleRequested, this, [this] {
-        m_settings->setThemeMode(isDark() ? Settings::ThemeMode::Light
-                                          : Settings::ThemeMode::Dark);
-    });
 
     connect(m_tabStrip, &TabStrip::currentChanged, this, &BrowserWindow::selectTab);
     connect(m_tabStrip, &TabStrip::closeRequested, this, &BrowserWindow::closeTab);
@@ -262,19 +256,7 @@ void BrowserWindow::buildShortcuts()
 
 BrowserTab* BrowserWindow::newTab(const QUrl& url, bool foreground)
 {
-    HomeContext context;
-    context.bookmarks = m_bookmarks;
-    context.history = m_history;
-    context.openTabCount = [this] { return static_cast<int>(m_tabs.size()); };
-    context.blockedTrackerCount = [this] {
-        return m_profile ? m_profile->blockedTrackerCount() : 0;
-    };
-    context.openHistory = [this] { showLibrary(false); };
-    context.openBookmarks = [this] { showLibrary(true); };
-    context.openSettings = [this] { showSettings(); };
-
-    auto* tab = new BrowserTab(m_profile->profile(), m_settings, context, this);
-    tab->setDarkMode(isDark());
+    auto* tab = new BrowserTab(m_profile->profile(), m_settings, m_history, this);
     connectTab(tab);
     m_pages->addWidget(tab);
     m_tabs.append(tab);
@@ -731,29 +713,13 @@ void BrowserWindow::updateForActiveTab()
     refreshTabStrip();
 }
 
-bool BrowserWindow::isDark() const
-{
-    return m_settings->themeMode() != Settings::ThemeMode::Light;
-}
-
-void BrowserWindow::applyTheme(bool dark)
-{
-    Theme::apply(dark);
-    m_sideBar->setDarkTheme(dark);
-    m_tabStrip->setDarkTheme(dark);
-    for (BrowserTab* tab : m_tabs) {
-        tab->setDarkMode(dark);
-    }
-    update();
-}
-
 void BrowserWindow::showEvent(QShowEvent* event)
 {
     QMainWindow::showEvent(event);
     // The native window handle only exists once the window is shown, so the
     // Mica / Acrylic request has to be made here rather than in the
     // constructor.
-    Glass::applyWindowBackdrop(this, isDark());
+    Glass::applyWindowBackdrop(this);
 }
 
 void BrowserWindow::closeEvent(QCloseEvent* event)

@@ -35,10 +35,6 @@ enum class Shape {
     Magnifier,
     ArrowRight,
     More,   // three dots: "more options"
-    Drag,   // six dots: a drag handle
-    Bookmark,
-    Clock,
-    Shield,
 };
 
 inline void stroke(QPainter& painter, const QPainterPath& path, const QColor& color,
@@ -182,50 +178,6 @@ inline void draw(QPainter& painter, Shape shape, const QRectF& box, const QColor
             for (const qreal x : {6.0, 12.0, 18.0}) {
                 painter.drawEllipse(QPointF(x, 12), 1.8, 1.8);
             }
-            break;
-        }
-        case Shape::Drag: {
-            painter.setPen(Qt::NoPen);
-            painter.setBrush(color);
-            for (const qreal y : {6.0, 12.0, 18.0}) {
-                for (const qreal x : {6.0, 12.0, 18.0}) {
-                    painter.drawEllipse(QPointF(x, y), 1.8, 1.8);
-                }
-            }
-            break;
-        }
-        case Shape::Bookmark: {
-            QPainterPath path;
-            path.moveTo(7, 4);
-            path.lineTo(17, 4);
-            path.lineTo(17, 20);
-            path.lineTo(12, 16);
-            path.lineTo(7, 20);
-            path.closeSubpath();
-            stroke(painter, path, color, width);
-            break;
-        }
-        case Shape::Clock: {
-            QPainterPath face;
-            face.addEllipse(QRectF(4.5, 4.5, 15.0, 15.0));
-            stroke(painter, face, color, width);
-            QPainterPath hands;
-            hands.moveTo(12, 8);
-            hands.lineTo(12, 12);
-            hands.lineTo(15, 14);
-            stroke(painter, hands, color, width);
-            break;
-        }
-        case Shape::Shield: {
-            QPainterPath path;
-            path.moveTo(12, 3.5);
-            path.lineTo(19, 6.5);
-            path.lineTo(19, 12);
-            path.cubicTo(19, 16.5, 15.8, 19.5, 12, 20.5);
-            path.cubicTo(8.2, 19.5, 5, 16.5, 5, 12);
-            path.lineTo(5, 6.5);
-            path.closeSubpath();
-            stroke(painter, path, color, width);
             break;
         }
     }

@@ -1,36 +1,66 @@
 // SPDX-License-Identifier: MIT
 #pragma once
 
-#include "home/HomeWidget.h"
-
-#include <QHash>
 #include <QList>
-#include <QPoint>
+#include <QString>
 #include <QUrl>
 #include <QWidget>
 
-class QScrollArea;
+class QGridLayout;
+class QLabel;
+class QLineEdit;
 class QToolButton;
-class QTimer;
+class QVBoxLayout;
 
 namespace yozora {
 
-class SearchWidget;
+class GlassField;
 
-// The Yozora home page: a night-sky canvas.
+// The pinned sites on the start page: a row of site icons standing straight on
+// the night sky, with no card around them. Right-click a site to remove it, and
+// use the last tile to add one. The list is saved to the user's own state
+// folder, never uploaded.
+class PinnedSites : public QWidget {
+    Q_OBJECT
+
+public:
+    explicit PinnedSites(QWidget* parent = nullptr);
+
+    [[nodiscard]] QSize sizeHint() const override;
+
+    void load();
+    void save() const;
+
+signals:
+    void openUrl(const QUrl& url);
+
+private:
+    struct Site {
+        QString url;
+        QString title;
+    };
+
+    void rebuild();
+    void addSite();
+    void removeSite(const QString& url);
+
+    QGridLayout* m_grid = nullptr;
+    QList<Site> m_sites;
+};
+
+// The Yozora start page: a wordmark, a search field and the pinned sites, laid
+// out in the middle of the night sky and nothing else.
 //
-// The search hero is pinned to the top of the page (like the Chrome start
-// page); every other widget is freely placeable — the header drags a card to
-// any position, the card's bottom-right corner resizes it, and the arrangement
-// is saved locally as fractional x/width plus pixel y/height.
+// There used to be a board of movable widgets here. It was replaced by this
+// fixed layout because a start page that can be rearranged is a page nobody can
+// recognise, and because the pinned sites read better directly on the artwork
+// than inside a card.
 class HomePage : public QWidget {
     Q_OBJECT
 
 public:
-    explicit HomePage(const HomeContext& context, QWidget* parent = nullptr);
-    ~HomePage() override;
+    explicit HomePage(QWidget* parent = nullptr);
 
-    // Puts the caret in the pinned search field.
     void focusSearch();
 
 signals:
@@ -40,47 +70,18 @@ signals:
 protected:
     void paintEvent(QPaintEvent* event) override;
     void resizeEvent(QResizeEvent* event) override;
-    bool eventFilter(QObject* watched, QEvent* event) override;
+    void keyPressEvent(QKeyEvent* event) override;
 
 private:
-    struct Placement {
-        qreal x = 0;  // 0..1 of the canvas width
-        int y = 0;    // px from the canvas top
-        qreal w = 0;  // 0..1 of the canvas width
-        int h = 0;    // px
-    };
+    void buildLayout();
+    [[nodiscard]] int topSpacing() const;
 
-    HomeWidget* createWidget(const QString& type);
-    void buildDefaultLayout();
-    // Looks up the compact arrangement for a widget type, used when migrating
-    // a layout written by an older version.
-    [[nodiscard]] bool defaultPlacementFor(const QString& type, Placement* out) const;
-    void loadLayout();
-    void placeWidget(HomeWidget* widget, const Placement& placement, bool userPlaced);
-    void layoutCanvas();
-    void addWidgetOfType(const QString& type);
-    void addDefaultWidget(const QString& type, Placement placement);
-    void removeWidget(HomeWidget* widget);
-    void onWidgetChanged();
-    void scheduleSave();
-    void saveLayout() const;
-    void showAddMenu();
-    void beginDrag(HomeWidget* widget);
-    void updateDrag(const QPoint& globalPos);
-    void finishDrag();
-    void relayoutHero();
-
-    HomeContext m_context;
-    QScrollArea* m_scroll = nullptr;
-    QWidget* m_canvas = nullptr;
-    QToolButton* m_addButton = nullptr;
-    SearchWidget* m_hero = nullptr;
-    QList<HomeWidget*> m_widgets;
-    QHash<HomeWidget*, Placement> m_placements;
-    QTimer* m_saveTimer = nullptr;
-
-    HomeWidget* m_dragWidget = nullptr;
-    QPoint m_dragOffset;
+    QVBoxLayout* m_root = nullptr;
+    QLabel* m_wordmark = nullptr;
+    QLabel* m_tagline = nullptr;
+    GlassField* m_field = nullptr;
+    QLabel* m_pinsTitle = nullptr;
+    PinnedSites* m_pins = nullptr;
 };
 
 }  // namespace yozora

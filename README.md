@@ -18,13 +18,13 @@ through Qt WebEngine.
 - Tabs: create, close, reorder, restore last closed (`Ctrl+Shift+T`)
 - Navigation: back, forward, reload, stop, with buttons that disable themselves
 - Address bar: URL or search query, `Ctrl+L` to focus
-- Yozora start page with a night-sky background
+- Yozora start page: search over a generated night sky, with pinned sites
 - Page context menu: open link, copy link, save image, clipboard actions
 - DevTools in a separate window (`F12`)
 - Downloads to a configurable folder, with progress and "open" / "show folder"
 - Yozora-branded error pages
-- Settings: search engine (including a custom one), new tab page, download
-  folder, dark / light theme
+- Settings: search engine (including a custom one), home page, download folder,
+  scroll behaviour
 
 ### Privacy & security
 
@@ -120,16 +120,17 @@ src/
   main.cpp             entry point; wiring only, no browser logic
   app/                 filesystem locations
   browser/             main window and tab model
-  core/                settings, search engines, theme, update check
+  core/                settings, search engines, theme, night sky, update check
   privacy/             tracker list, request interceptor, permissions, download safety
-  ui/                  address bar, navigation bar, tab strip, start page, dialogs
+  home/                the start page: search field and pinned sites
+  ui/                  address bar, navigation bar, tab strip, dialogs
   utils/               URL parsing and search detection
   web/                 everything that touches Qt WebEngine
-resources/             icons, the tracker filter list and the Qt resource bundle
+resources/             icons, bundled fonts, the tracker list, the Qt resource bundle
 docs/                  privacy and security notes
-tests/                 unit tests (URL logic, tab behaviour, privacy logic)
+tests/                 unit tests (URL logic, tab behaviour, privacy, painting)
 cmake/                 packaging rules
-installer/             installer assets
+installer/             installer assets and the font / icon generators
 ```
 
 The dependency direction is one-way: `browser/` knows about `ui/`, `web/` and
@@ -149,6 +150,10 @@ The subdirectory `profile/` holds the Chromium profile — cookies, localStorage
 cache, service workers. Deleting it resets the browser to a clean state. An
 optional `privacy/blocklist.txt` lets you extend the tracker list locally.
 
+`state/` holds small JSON files that belong to the user rather than to Chromium:
+`bookmarks.json`, `history.json` and `pinned-sites.json` (the sites pinned to
+the start page).
+
 ## Roadmap
 
 MVP first (done). Privacy hardening (Phase 2) is in place: cookies, tracker
@@ -160,4 +165,11 @@ known-tracker blocking is.
 
 ## License
 
-MIT. See [LICENSE](LICENSE).
+MIT for the code. See [LICENSE](LICENSE).
+
+The bundled typefaces are third-party and carry their own licence:
+[Inter](https://github.com/rsms/inter) and
+[Space Grotesk](https://fonts.google.com/specimen/Space+Grotesk) are both under
+the SIL Open Font License 1.1, reproduced in
+`resources/fonts/OFL.txt`. They are rebuilt from the upstream variable fonts by
+`installer/make_fonts.py`.

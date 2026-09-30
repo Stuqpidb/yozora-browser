@@ -75,11 +75,10 @@ public:
 
     // Complete offline HTML document, ready for QWebEnginePage::setHtml().
     [[nodiscard]] static QString html(const QUrl& url, int domain, int errorCode,
-                                      const QString& errorString, bool dark);
+                                      const QString& errorString);
 
     // Convenience overload for "this host does not resolve".
-    [[nodiscard]] static QString htmlForHost(const QString& host, const QString& reason,
-                                             bool dark);
+    [[nodiscard]] static QString htmlForHost(const QString& host, const QString& reason);
 };
 
 }  // namespace yozora

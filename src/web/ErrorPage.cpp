@@ -186,7 +186,7 @@ QString moonGlyph()
 }
 
 QString document(const QString& host, const QString& title, const QString& hint,
-                 const QString& detail, bool dark)
+                 const QString& detail)
 {
     const QString detailHtml = detail.isEmpty()
         ? QString()
@@ -237,7 +237,7 @@ button:hover { filter: brightness(1.1); }
   </div>
 </body>
 </html>)HTML")
-        .replace(QStringLiteral("%STYLE%"), Theme::htmlStyle(dark))
+        .replace(QStringLiteral("%STYLE%"), Theme::htmlStyle())
         .replace(QStringLiteral("%TITLE%"), escaped(title))
         .replace(QStringLiteral("%HOST%"), escaped(host))
         .replace(QStringLiteral("%HINT%"), escaped(hint))
@@ -268,22 +268,20 @@ QString ErrorPage::hintFor(int domain, int errorCode)
     return net;
 }
 
-QString ErrorPage::html(const QUrl& url, int domain, int errorCode, const QString& errorString,
-                        bool dark)
+QString ErrorPage::html(const QUrl& url, int domain, int errorCode, const QString& errorString)
 {
     const QString host =
         url.host().isEmpty() ? (url.isValid() ? url.toString() : QStringLiteral("about:blank"))
                             : url.host();
-    return document(host, titleFor(domain, errorCode), hintFor(domain, errorCode), errorString,
-                    dark);
+    return document(host, titleFor(domain, errorCode), hintFor(domain, errorCode), errorString);
 }
 
-QString ErrorPage::htmlForHost(const QString& host, const QString& reason, bool dark)
+QString ErrorPage::htmlForHost(const QString& host, const QString& reason)
 {
     return document(host, QStringLiteral("Site not found"),
                     QStringLiteral("Yozora could not find this site on the network. Check the "
                                    "address for a typo, or check your connection."),
-                    reason, dark);
+                    reason);
 }
 
 }  // namespace yozora

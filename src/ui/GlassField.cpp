@@ -102,6 +102,16 @@ void GlassField::setRadius(qreal radius)
     update();
 }
 
+void GlassField::setShadowMargin(qreal margin)
+{
+    if (qFuzzyCompare(m_margin, margin)) {
+        return;
+    }
+    m_margin = margin;
+    layoutEditor();
+    update();
+}
+
 void GlassField::setHeroMode(bool hero)
 {
     if (m_hero == hero) {
@@ -116,14 +126,21 @@ qreal GlassField::iconSize() const
 {
     // The icons scale with the field, so a 40px toolbar field and a 56px
     // start-page field get proportionally sized glyphs.
-    return qBound(18.0, height() * (m_hero ? 0.44 : 0.50), 28.0);
+    return qBound(18.0, surfaceRect().height() * (m_hero ? 0.44 : 0.50), 28.0);
 }
 
 QRectF GlassField::trailingBox() const
 {
     const qreal icon = iconSize();
     const qreal pad = m_hero ? 20.0 : 14.0;
-    return QRectF(width() - pad - icon, (height() - icon) / 2.0, icon, icon);
+    const QRectF surface = surfaceRect();
+    return QRectF(surface.right() - pad - icon, surface.top() + (surface.height() - icon) / 2.0,
+                  icon, icon);
+}
+
+QRectF GlassField::surfaceRect() const
+{
+    return QRectF(m_margin, m_margin, width() - 2 * m_margin, height() - 2 * m_margin);
 }
 
 void GlassField::layoutEditor()
@@ -137,7 +154,8 @@ void GlassField::layoutEditor()
         ? qRound(pad)
         : qRound(pad + icon + gap);
 
-    const QRect area = contentsRect().adjusted(left, 0, -right, 0);
+    const QRectF surface = surfaceRect();
+    const QRect area = surface.toRect().adjusted(left, 0, -right, 0);
     if (area.width() > 0) {
         m_editor->setGeometry(area);
     }
@@ -180,7 +198,6 @@ void GlassField::mousePressEvent(QMouseEvent* event)
     m_editor->setFocus();
     QFrame::mousePressEvent(event);
 }
-
 void GlassField::drawIcon(QPainter& painter, icons::Shape shape, const QRectF& box,
                           const QColor& color) const
 {
@@ -189,15 +206,18 @@ void GlassField::drawIcon(QPainter& painter, icons::Shape shape, const QRectF& b
 
 void GlassField::paintEvent(QPaintEvent* event)
 {
-    const bool dark = Theme::isDark();
-    const auto c = dark ? Theme::darkColors() : Theme::lightColors();
-    const Glass::Recipe glass = Glass::recipe(dark, m_radius);
+    const auto c = Theme::colors();
+    const Glass::Recipe glass = Glass::recipe(m_radius);
 
     QPainter painter(this);
     painter.setRenderHint(QPainter::Antialiasing, true);
 
-    const QRectF pill(0.5, 0.5, width() - 1.0, height() - 1.0);
-    Glass::paintShadow(painter, pill, glass, 0.75);
+    // The pill is inset by the shadow margin so the blur has somewhere to go;
+    // painting it at the widget bounds clipped the shadow against the edges and
+    // made the field look pressed into the page.
+    const QRectF surface = surfaceRect();
+    const QRectF pill = surface.adjusted(0.5, 0.5, -0.5, -0.5);
+    Glass::paintShadow(painter, pill, glass, 0.8);
     Glass::paintPanel(painter, pill, glass, 1.0);
 
     if (m_editor->hasFocus()) {
@@ -217,7 +237,8 @@ void GlassField::paintEvent(QPaintEvent* event)
     const QColor iconColor(c.textMuted);
 
     drawIcon(painter, icons::Shape::Magnifier,
-             QRectF(pad, (height() - icon) / 2.0, icon, icon), iconColor);
+             QRectF(surface.left() + pad, surface.top() + (surface.height() - icon) / 2.0, icon, icon),
+             iconColor);
 
     if (m_trailing != Trailing::None) {
         const bool active = !m_editor->text().isEmpty();

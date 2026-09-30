@@ -29,11 +29,16 @@ public:
     [[nodiscard]] static QString trackerListPath();
 
     // Local, user owned state that is not Chromium data: bookmarks, history and
-    // the saved home-page layout. All plain JSON on this machine.
+    // the pinned sites on the start page. All plain JSON on this machine.
     [[nodiscard]] static QString stateDir();
     [[nodiscard]] static QString bookmarksPath();
     [[nodiscard]] static QString historyPath();
-    [[nodiscard]] static QString homeLayoutPath();
+    [[nodiscard]] static QString pinnedSitesPath();
+
+    // The start page used to be a board of movable widgets whose positions were
+    // saved to home.json. It is a fixed layout now; the file is only read once,
+    // to carry the pinned sites over, and is then left alone.
+    [[nodiscard]] static QString legacyHomeLayoutPath();
 
     // Marker file whose presence asks the next start to wipe on-disk site
     // storage (localStorage, IndexedDB, service workers) before the profile is

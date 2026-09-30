@@ -54,12 +54,6 @@ void TabStrip::setCurrentIndex(int index)
     update();
 }
 
-void TabStrip::setDarkTheme(bool dark)
-{
-    m_dark = dark;
-    update();
-}
-
 QSize TabStrip::sizeHint() const
 {
     return {900, kHeight};
@@ -124,8 +118,8 @@ int TabStrip::dropIndexFor(const QPoint& pos) const
 
 void TabStrip::paintEvent(QPaintEvent*)
 {
-    const Theme::Colors c = m_dark ? Theme::darkColors() : Theme::lightColors();
-    const Glass::Recipe glass = Glass::recipe(m_dark, 11);
+    const Theme::Colors c = Theme::colors();
+    const Glass::Recipe glass = Glass::recipe(11);
     QPainter painter(this);
     painter.setRenderHint(QPainter::Antialiasing, true);
     painter.fillRect(rect(), QColor(c.background));

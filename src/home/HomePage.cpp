@@ -2,444 +2,371 @@
 #include "home/HomePage.h"
 
 #include "app/AppPaths.h"
+#include "core/Glass.h"
+#include "core/NightSky.h"
 #include "core/Theme.h"
-#include "home/HomeWidgets.h"
+#include "ui/GlassField.h"
+#include "ui/Icons.h"
 
-#include <QDateTime>
 #include <QFile>
+#include <QFont>
+#include <QGridLayout>
+#include <QInputDialog>
 #include <QJsonArray>
 #include <QJsonDocument>
 #include <QJsonObject>
-#include <QLinearGradient>
+#include <QKeyEvent>
+#include <QLabel>
+#include <QLineEdit>
 #include <QMenu>
 #include <QPainter>
-#include <QRandomGenerator>
+#include <QPaintEvent>
+#include <QPixmap>
 #include <QResizeEvent>
 #include <QSaveFile>
-#include <QScrollArea>
-#include <QTimer>
 #include <QToolButton>
 #include <QVBoxLayout>
+
+#include <utility>
 
 namespace yozora {
 
 namespace {
 
-// Bumped whenever the home page geometry changes. A layout written by an older
-// version is re-flowed to the new grid, but the per-widget settings (pinned
-// sites, notes text) are always preserved - a redesign must never throw away
-// what the user put on their page.
-constexpr int kLayoutVersion = 3;
+constexpr int kTileSize = 88;
+constexpr int kTileSpacing = 10;
+constexpr int kFieldWidth = 604;
+constexpr int kFieldHeight = 58;
 
-// The compact home-screen arrangement. Widths are a fraction of the canvas,
-// heights are pixels.
-struct DefaultCard {
-    const char* type;
-    qreal x;
-    int y;
-    qreal w;
-    int h;
-};
-
-const DefaultCard kDefaultCards[] = {
-    {"sites", 0.0, 0, 0.655, 208},
-    {"quickaccess", 0.675, 0, 0.325, 208},
-    {"history", 0.0, 220, 0.485, 196},
-    {"bookmarks", 0.515, 220, 0.485, 196},
-    {"stats", 0.0, 428, 0.315, 178},
-    {"privacy", 0.3425, 428, 0.315, 178},
-    {"weather", 0.6725, 428, 0.3275, 178},
-    {"clock", 0.0, 618, 0.315, 150},
-    {"notes", 0.3425, 618, 0.6575, 150},
-};
-
-void paintNightSky(QPainter& painter, const QRect& rect, bool dark)
+// A round, coloured tile with the first letter of the site. The hue comes from
+// the address, so the same site always looks the same.
+QIcon letterAvatar(const QString& text, const QString& seed)
 {
-    QLinearGradient gradient(rect.topLeft(), rect.bottomRight());
-    if (dark) {
-        gradient.setColorAt(0.0, QColor(0x14, 0x1b, 0x3c));
-        gradient.setColorAt(0.45, QColor(0x1b, 0x16, 0x46));
-        gradient.setColorAt(1.0, QColor(0x0c, 0x10, 0x2c));
-    } else {
-        gradient.setColorAt(0.0, QColor(0xf6, 0xf8, 0xfe));
-        gradient.setColorAt(1.0, QColor(0xe4, 0xea, 0xf8));
-    }
-    painter.fillRect(rect, gradient);
-
-    const auto nebula = [&painter, &rect](qreal cx, qreal cy, qreal spread, const QColor& color) {
-        const qreal radius = qMax(rect.width(), rect.height()) * spread;
-        QRadialGradient glow(QPointF(rect.width() * cx, rect.height() * cy), radius);
-        glow.setColorAt(0.0, color);
-        glow.setColorAt(1.0, QColor(color.red(), color.green(), color.blue(), 0));
-        painter.setPen(Qt::NoPen);
-        painter.setBrush(glow);
-        painter.drawEllipse(QPointF(rect.width() * cx, rect.height() * cy), radius, radius);
-    };
-    nebula(0.18, 0.12, 0.45, dark ? QColor(0x6a, 0x3c, 0xff, 60) : QColor(0x9a, 0x8c, 0xff, 40));
-    nebula(0.85, 0.30, 0.40, dark ? QColor(0x2f, 0x7b, 0xff, 55) : QColor(0x7f, 0xb0, 0xff, 36));
-
-    QRandomGenerator random(0x59A0);
-    const int starCount = qBound(70, rect.width() * rect.height() / 6500, 340);
+    const int hue = static_cast<int>(qHash(seed) % 360);
+    const QColor color = QColor::fromHsl(hue, 148, 128);
+    QPixmap pixmap(96, 96);
+    pixmap.fill(Qt::transparent);
+    QPainter painter(&pixmap);
+    painter.setRenderHint(QPainter::Antialiasing, true);
     painter.setPen(Qt::NoPen);
-    for (int i = 0; i < starCount; ++i) {
-        const int x = static_cast<int>(random.bounded(static_cast<quint32>(qMax(1, rect.width()))));
-        const int y = static_cast<int>(random.bounded(static_cast<quint32>(qMax(1, rect.height()))));
-        const int alpha = 70 + static_cast<int>(random.bounded(165));
-        const int size = (i % 40 == 0) ? 2 : 1;
-        painter.setBrush(QColor(0xd6, 0xe0, 0xff, dark ? alpha : alpha / 4));
-        painter.drawEllipse(x, y, size, size);
-    }
+    painter.setBrush(color);
+    // A superellipse, not a rounded square: this is the shape that makes a
+    // grid of icons read as a home screen rather than as a list of buttons.
+    painter.drawPath(Glass::squircle(QRectF(6, 6, 84, 84), 25));
+    QFont font(Theme::displayFamily());
+    font.setPointSizeF(36);
+    font.setWeight(QFont::Bold);
+    painter.setFont(font);
+    painter.setPen(Qt::white);
+    painter.drawText(pixmap.rect(), Qt::AlignCenter,
+                     QString(text.isEmpty() ? QStringLiteral("?") : text.left(1).toUpper()));
+    return QIcon(pixmap);
+}
 
-    // A moon with a soft halo.
-    const QPointF moon(rect.width() * 0.80, rect.height() * 0.18);
-    const qreal halo = qMax(rect.width(), rect.height()) * 0.20;
-    QRadialGradient moonGlow(moon, halo);
-    moonGlow.setColorAt(0.0, QColor(0xdf, 0xe6, 0xff, dark ? 90 : 70));
-    moonGlow.setColorAt(0.25, QColor(0x9a, 0xa8, 0xff, dark ? 40 : 30));
-    moonGlow.setColorAt(1.0, QColor(0x6e, 0x8c, 0xff, 0));
-    painter.setBrush(moonGlow);
-    painter.drawEllipse(moon, halo, halo);
-    if (dark) {
-        painter.setBrush(QColor(0xea, 0xee, 0xff, 230));
-        painter.drawEllipse(moon, 26, 26);
-        painter.setBrush(QColor(0xd2, 0xd8, 0xf2, 220));
-        painter.drawEllipse(QPointF(moon.x() + 9, moon.y() - 7), 7, 7);
+QString hostOf(const QString& url)
+{
+    QString host = QUrl(url).host();
+    if (host.startsWith(QLatin1String("www."))) {
+        host.remove(0, 4);
     }
+    return host.isEmpty() ? url : host;
+}
+
+QList<QPair<QString, QString>> defaultSites()
+{
+    return {
+        {QStringLiteral("https://duckduckgo.com"), QStringLiteral("DuckDuckGo")},
+        {QStringLiteral("https://github.com"), QStringLiteral("GitHub")},
+        {QStringLiteral("https://www.youtube.com"), QStringLiteral("YouTube")},
+        {QStringLiteral("https://en.wikipedia.org"), QStringLiteral("Wikipedia")},
+        {QStringLiteral("https://www.reddit.com"), QStringLiteral("Reddit")},
+        {QStringLiteral("https://news.ycombinator.com"), QStringLiteral("Hacker News")},
+    };
 }
 
 }  // namespace
 
-HomePage::HomePage(const HomeContext& context, QWidget* parent)
+// ---------------------------------------------------------------------------
+// Pinned sites
+// ---------------------------------------------------------------------------
+
+PinnedSites::PinnedSites(QWidget* parent)
     : QWidget(parent)
-    , m_context(context)
 {
-    setObjectName(QStringLiteral("homePage"));
-
-    auto* root = new QVBoxLayout(this);
-    root->setContentsMargins(0, 0, 0, 0);
-    root->setSpacing(0);
-
-    // The hero is pinned like the Chrome start page and lives above the canvas.
-    m_hero = new SearchWidget(m_context, this);
-    m_hero->setFixed(true);
-    connect(m_hero, &SearchWidget::searchRequested, this, &HomePage::searchRequested);
-    // Centred horizontally, and given breathing room above the widget board so
-    // it sits in the upper third of the window rather than glued to the top.
-    m_hero->setFixedHeight(250);
-    m_hero->setSizePolicy(QSizePolicy::Fixed, QSizePolicy::Fixed);
-    root->addWidget(m_hero, 0, Qt::AlignHCenter);
-    root->addSpacing(6);
-
-    // The canvas holds every movable widget, absolutely positioned.
-    m_scroll = new QScrollArea(this);
-    m_scroll->setObjectName(QStringLiteral("homeScroll"));
-    m_scroll->setFrameShape(QFrame::NoFrame);
-    m_scroll->setHorizontalScrollBarPolicy(Qt::ScrollBarAlwaysOff);
-    m_scroll->setVerticalScrollBarPolicy(Qt::ScrollBarAsNeeded);
-    m_scroll->setWidgetResizable(false);
-    m_scroll->viewport()->setAutoFillBackground(false);
-    m_canvas = new QWidget(m_scroll);
-    m_canvas->setAttribute(Qt::WA_StyledBackground, false);
-    m_scroll->setWidget(m_canvas);
-    m_scroll->viewport()->installEventFilter(this);
-    root->addWidget(m_scroll, 1);
-
-    m_addButton = new QToolButton(this);
-    m_addButton->setObjectName(QStringLiteral("navButton"));
-    m_addButton->setToolButtonStyle(Qt::ToolButtonIconOnly);
-    m_addButton->setIcon(icons::icon(icons::Shape::Plus, 20, QColor(Theme::isDark()
-        ? Theme::darkColors().textMuted : Theme::lightColors().textMuted)));
-    m_addButton->setToolTip(tr("Add a widget"));
-    m_addButton->setCursor(Qt::PointingHandCursor);
-    m_addButton->setFixedSize(40, 40);
-    m_addButton->raise();
-    connect(m_addButton, &QToolButton::clicked, this, &HomePage::showAddMenu);
-
-    m_saveTimer = new QTimer(this);
-    m_saveTimer->setSingleShot(true);
-    m_saveTimer->setInterval(400);
-    connect(m_saveTimer, &QTimer::timeout, this, &HomePage::saveLayout);
-
-    loadLayout();
-    layoutCanvas();
+    setObjectName(QStringLiteral("pinnedSites"));
+    m_grid = new QGridLayout(this);
+    m_grid->setSpacing(kTileSpacing);
+    m_grid->setContentsMargins(0, 0, 0, 0);
+    // Packed to the left and centred as a block: a row of icons, not a
+    // justified table.
+    m_grid->setAlignment(Qt::AlignCenter);
 }
 
-HomePage::~HomePage() = default;
-
-HomeWidget* HomePage::createWidget(const QString& type)
+QSize PinnedSites::sizeHint() const
 {
-    HomeWidget* widget = nullptr;
-    if (type == QLatin1String("sites")) {
-        auto* sites = new SitesWidget(m_context, m_canvas);
-        connect(sites, &SitesWidget::openUrl, this, &HomePage::openUrl);
-        widget = sites;
-    } else if (type == QLatin1String("bookmarks")) {
-        auto* bookmarks = new BookmarksWidget(m_context, m_canvas);
-        connect(bookmarks, &BookmarksWidget::openUrl, this, &HomePage::openUrl);
-        widget = bookmarks;
-    } else if (type == QLatin1String("history")) {
-        auto* history = new HistoryWidget(m_context, m_canvas);
-        connect(history, &HistoryWidget::openUrl, this, &HomePage::openUrl);
-        widget = history;
-    } else if (type == QLatin1String("quickaccess")) {
-        auto* quick = new QuickAccessWidget(m_context, m_canvas);
-        connect(quick, &QuickAccessWidget::openUrl, this, &HomePage::openUrl);
-        widget = quick;
-    } else if (type == QLatin1String("stats")) {
-        widget = new StatsWidget(m_context, m_canvas);
-    } else if (type == QLatin1String("privacy")) {
-        widget = new PrivacyWidget(m_context, m_canvas);
-    } else if (type == QLatin1String("notes")) {
-        widget = new NotesWidget(m_context, m_canvas);
-    } else if (type == QLatin1String("weather")) {
-        widget = new WeatherWidget(m_context, m_canvas);
-    } else if (type == QLatin1String("clock")) {
-        widget = new ClockWidget(m_context, m_canvas);
-    }
-
-    if (widget) {
-        connect(widget, &HomeWidget::removeRequested, this, [this, widget] { removeWidget(widget); });
-        connect(widget, &HomeWidget::changed, this, &HomePage::onWidgetChanged);
-        connect(widget, &HomeWidget::dragBegin, this, [this, widget] { beginDrag(widget); });
-        connect(widget, &HomeWidget::dragMove, this, &HomePage::updateDrag);
-        connect(widget, &HomeWidget::dragDrop, this, [this](const QPoint&) { finishDrag(); });
-    }
-    return widget;
+    const int count = m_sites.size() + 1;
+    const int columns = qMax(1, qMin(count, 9));
+    const int rows = (count + columns - 1) / columns;
+    return {columns * (kTileSize + kTileSpacing), rows * (kTileSize + kTileSpacing)};
 }
 
-void HomePage::placeWidget(HomeWidget* widget, const Placement& placement, bool)
+void PinnedSites::rebuild()
 {
-    m_widgets.append(widget);
-    m_placements.insert(widget, placement);
-}
-
-void HomePage::addDefaultWidget(const QString& type, Placement placement)
-{
-    if (HomeWidget* widget = createWidget(type)) {
-        placeWidget(widget, placement, false);
-    }
-}
-
-void HomePage::buildDefaultLayout()
-{
-    for (HomeWidget* widget : m_widgets) {
-        widget->deleteLater();
-    }
-    m_widgets.clear();
-    m_placements.clear();
-
-    // Compact cards, close together: a home screen, not a dashboard.
-    for (const DefaultCard& card : kDefaultCards) {
-        addDefaultWidget(QString::fromLatin1(card.type),
-                         Placement{card.x, card.y, card.w, card.h});
+    while (QLayoutItem* item = m_grid->takeAt(0)) {
+        if (QWidget* widget = item->widget()) {
+            widget->deleteLater();
+        }
+        delete item;
     }
 
-    scheduleSave();
+    // A single row while the list is short; it starts wrapping when the user
+    // pins more than a handful of sites.
+    const int columns = qMax(1, qMin(m_sites.size() + 1, 9));
+    int index = 0;
+    for (const Site& site : std::as_const(m_sites)) {
+        auto* tile = new QToolButton(this);
+        tile->setObjectName(QStringLiteral("siteTile"));
+        tile->setToolButtonStyle(Qt::ToolButtonTextUnderIcon);
+        tile->setIcon(letterAvatar(site.title, site.url));
+        tile->setIconSize(QSize(44, 44));
+        tile->setText(site.title);
+        tile->setToolTip(site.url);
+        tile->setCursor(Qt::PointingHandCursor);
+        tile->setFixedSize(kTileSize, kTileSize);
+        tile->setContextMenuPolicy(Qt::CustomContextMenu);
+        const QString url = site.url;
+        connect(tile, &QToolButton::clicked, this, [this, url] { emit openUrl(QUrl(url)); });
+        connect(tile, &QToolButton::customContextMenuRequested, this, [this, url](const QPoint& at) {
+            QMenu menu;
+            QAction* remove = menu.addAction(tr("Remove"));
+            if (menu.exec(mapToGlobal(at)) == remove) {
+                removeSite(url);
+            }
+        });
+        m_grid->addWidget(tile, index / columns, index % columns);
+        ++index;
+    }
+
+    auto* add = new QToolButton(this);
+    add->setObjectName(QStringLiteral("siteTile"));
+    add->setToolButtonStyle(Qt::ToolButtonIconOnly);
+    add->setIcon(icons::icon(icons::Shape::Plus, 26, QColor(Theme::colors().textMuted)));
+    add->setToolTip(tr("Add a site"));
+    add->setCursor(Qt::PointingHandCursor);
+    add->setFixedSize(kTileSize, kTileSize);
+    connect(add, &QToolButton::clicked, this, &PinnedSites::addSite);
+    m_grid->addWidget(add, index / columns, index % columns);
+
+    updateGeometry();
 }
 
-bool HomePage::defaultPlacementFor(const QString& type, Placement* out) const
+void PinnedSites::addSite()
 {
-    for (const DefaultCard& card : kDefaultCards) {
-        if (type == QLatin1String(card.type)) {
-            *out = Placement{card.x, card.y, card.w, card.h};
-            return true;
+    bool ok = false;
+    const QString input = QInputDialog::getText(this, tr("Add site"), tr("Address:"),
+                                                QLineEdit::Normal, QString(), &ok);
+    if (!ok || input.trimmed().isEmpty()) {
+        return;
+    }
+    QString url = input.trimmed();
+    if (!url.contains(QLatin1String("://"))) {
+        url.prepend(QLatin1String("https://"));
+    }
+    m_sites.append({url, hostOf(url)});
+    rebuild();
+    save();
+}
+
+void PinnedSites::removeSite(const QString& url)
+{
+    for (int i = 0; i < m_sites.size(); ++i) {
+        if (m_sites.at(i).url == url) {
+            m_sites.removeAt(i);
+            rebuild();
+            save();
+            return;
         }
     }
-    return false;
 }
 
-void HomePage::loadLayout()
+void PinnedSites::load()
 {
-    QFile file(AppPaths::homeLayoutPath());
-    QJsonDocument document;
+    m_sites.clear();
+
+    QJsonArray sites;
+    QFile file(AppPaths::pinnedSitesPath());
     if (file.open(QIODevice::ReadOnly)) {
-        document = QJsonDocument::fromJson(file.readAll());
+        sites = QJsonDocument::fromJson(file.readAll()).object()
+                    .value(QStringLiteral("sites")).toArray();
     }
 
-    const QJsonObject root = document.object();
-    const int version = root.value(QStringLiteral("version")).toInt(0);
-    const QJsonArray array =
-        document.isArray() ? document.array() : root.value(QStringLiteral("widgets")).toArray();
-    if (array.isEmpty()) {
-        buildDefaultLayout();
+    bool migrated = false;
+    if (sites.isEmpty()) {
+        // One-time carry-over from the widget board: the pins the user had
+        // there are the one thing worth keeping from it.
+        QFile legacy(AppPaths::legacyHomeLayoutPath());
+        if (legacy.open(QIODevice::ReadOnly)) {
+            const QJsonObject root = QJsonDocument::fromJson(legacy.readAll()).object();
+            for (const QJsonValue& value : root.value(QStringLiteral("widgets")).toArray()) {
+                const QJsonObject widget = value.toObject();
+                if (widget.value(QStringLiteral("type")).toString() == QLatin1String("sites")) {
+                    sites = widget.value(QStringLiteral("sites")).toArray();
+                    migrated = !sites.isEmpty();
+                    break;
+                }
+            }
+        }
+    }
+
+    if (sites.isEmpty()) {
+        for (const auto& site : defaultSites()) {
+            m_sites.append({site.first, site.second});
+        }
+        rebuild();
+        // Written straight away, so the migration above runs once instead of on
+        // every start.
+        save();
         return;
     }
-
-    const bool reflow = version < kLayoutVersion;
-    for (const QJsonValue& value : array) {
-        const QJsonObject object = value.toObject();
-        const QString type = object.value(QStringLiteral("type")).toString();
-        HomeWidget* widget = createWidget(type);
-        if (!widget) {
-            continue;
+    for (const QJsonValue& value : std::as_const(sites)) {
+        const QJsonObject entry = value.toObject();
+        const QString url = entry.value(QStringLiteral("url")).toString();
+        if (!url.isEmpty()) {
+            m_sites.append({url, entry.value(QStringLiteral("title")).toString()});
         }
-        // Always restored: this is the user's own data, not layout.
-        widget->restore(object);
-
-        Placement placement;
-        if (reflow && defaultPlacementFor(type, &placement)) {
-            // The old pixel positions do not fit the compact grid.
-        } else {
-            placement.x = qBound(0.0, object.value(QStringLiteral("x")).toDouble(), 1.0);
-            placement.y = qMax(0, object.value(QStringLiteral("y")).toInt());
-            placement.w = qBound(0.05, object.value(QStringLiteral("w")).toDouble(), 1.0);
-            placement.h = qMax(120, object.value(QStringLiteral("h")).toInt());
-        }
-        placeWidget(widget, placement, true);
     }
+    rebuild();
 
-    if (m_widgets.isEmpty()) {
-        buildDefaultLayout();
+    if (migrated) {
+        // Only the pins were carried over, but writing them out means the next
+        // start no longer has to open home.json at all.
+        save();
     }
 }
 
-void HomePage::layoutCanvas()
+void PinnedSites::save() const
 {
-    const int width = qMax(1, m_scroll->viewport()->width() - 52);
-    int bottom = 0;
-    for (HomeWidget* widget : m_widgets) {
-        const Placement placement = m_placements.value(widget);
-        const int x = 26 + qRound(placement.x * width);
-        const int w = qRound(placement.w * width);
-        widget->setGeometry(x, placement.y, w, placement.h);
-        bottom = qMax(bottom, placement.y + placement.h);
-    }
-    const int canvasHeight = qMax(bottom + 28, m_scroll->viewport()->height());
-    m_canvas->setGeometry(26, 0, width, canvasHeight);
-}
-
-void HomePage::onWidgetChanged()
-{
-    // Size changes are stored with the widget itself; the canvas only needs
-    // to recompute its own height so the page can scroll.
-    scheduleSave();
-    layoutCanvas();
-}
-
-void HomePage::addWidgetOfType(const QString& type)
-{
-    HomeWidget* widget = createWidget(type);
-    if (!widget) {
-        return;
-    }
-    // Put the new card below everything that is already on the page.
-    int bottom = 0;
-    for (HomeWidget* other : m_widgets) {
-        const Placement placement = m_placements.value(other);
-        bottom = qMax(bottom, placement.y + placement.h);
-    }
-    placeWidget(widget, Placement{0.0, bottom + 20, 0.485, 260}, true);
-    layoutCanvas();
-    widget->raise();
-    scheduleSave();
-}
-
-void HomePage::removeWidget(HomeWidget* widget)
-{
-    m_placements.remove(widget);
-    m_widgets.removeAll(widget);
-    widget->deleteLater();
-    layoutCanvas();
-    scheduleSave();
-}
-
-void HomePage::scheduleSave()
-{
-    m_saveTimer->start();
-}
-
-void HomePage::saveLayout() const
-{
-    AppPaths::ensureCreated();
     QJsonArray array;
-    for (HomeWidget* widget : m_widgets) {
-        const Placement placement = m_placements.value(widget);
-        QJsonObject object = widget->save();
-        object.insert(QStringLiteral("x"), placement.x);
-        object.insert(QStringLiteral("y"), placement.y);
-        object.insert(QStringLiteral("w"), placement.w);
-        object.insert(QStringLiteral("h"), placement.h);
-        array.append(object);
+    for (const Site& site : m_sites) {
+        QJsonObject entry;
+        entry.insert(QStringLiteral("url"), site.url);
+        entry.insert(QStringLiteral("title"), site.title);
+        array.append(entry);
     }
-    QSaveFile file(AppPaths::homeLayoutPath());
+    QJsonObject root;
+    root.insert(QStringLiteral("version"), 1);
+    root.insert(QStringLiteral("sites"), array);
+
+    QSaveFile file(AppPaths::pinnedSitesPath());
     if (!file.open(QIODevice::WriteOnly)) {
         return;
     }
-    QJsonObject root;
-    root.insert(QStringLiteral("version"), kLayoutVersion);
-    root.insert(QStringLiteral("widgets"), array);
     file.write(QJsonDocument(root).toJson(QJsonDocument::Indented));
     file.commit();
 }
 
-void HomePage::showAddMenu()
+// ---------------------------------------------------------------------------
+// Home page
+// ---------------------------------------------------------------------------
+
+HomePage::HomePage(QWidget* parent)
+    : QWidget(parent)
 {
-    QMenu menu(this);
-    struct Entry {
-        const char* type;
-        QString label;
+    setObjectName(QStringLiteral("homePage"));
+    // The sky is painted by this widget, so it must be opaque: leaving the
+    // widget translucent makes Qt skip the background fill and hand the paint
+    // to a parent that paints the flat window colour instead.
+    setAutoFillBackground(false);
+
+    buildLayout();
+    m_pins->load();
+    m_field->setFocus(Qt::OtherFocusReason);
+}
+
+void HomePage::buildLayout()
+{
+    m_root = new QVBoxLayout(this);
+    m_root->setContentsMargins(0, 0, 0, 0);
+    m_root->setSpacing(0);
+    m_root->addStretch(1);
+
+    m_wordmark = new QLabel(QStringLiteral("✦  YOZORA"), this);
+    m_wordmark->setObjectName(QStringLiteral("heroWordmark"));
+    m_wordmark->setAlignment(Qt::AlignCenter);
+    QFont wordFont(Theme::displayFamily());
+    wordFont.setPointSizeF(30.0);
+    wordFont.setWeight(QFont::Bold);
+    wordFont.setLetterSpacing(QFont::AbsoluteSpacing, 9);
+    m_wordmark->setFont(wordFont);
+
+    m_tagline = new QLabel(tr("Your world. Your browser."), this);
+    m_tagline->setObjectName(QStringLiteral("heroTagline"));
+    m_tagline->setAlignment(Qt::AlignCenter);
+
+    m_field = new GlassField(this);
+    m_field->setObjectName(QStringLiteral("heroSearch"));
+    m_field->setPlaceholderText(tr("Search the web or enter a URL..."));
+    m_field->setHeroMode(true);
+    m_field->setRadius(29.0);
+    m_field->setTrailing(GlassField::Trailing::Arrow);
+    // Room for the shadow to spread: painted at the widget's own bounds it is
+    // clipped, and the field ends up looking dented into the sky.
+    m_field->setShadowMargin(Glass::shadowMargin());
+    m_field->setFixedSize(kFieldWidth + 2 * Glass::shadowMargin(),
+                          kFieldHeight + 2 * Glass::shadowMargin());
+    m_field->setFocusPolicy(Qt::StrongFocus);
+
+    const auto search = [this] {
+        const QString text = m_field->text().trimmed();
+        if (!text.isEmpty()) {
+            emit searchRequested(text);
+        }
     };
-    const QList<Entry> entries = {
-        {"sites", tr("Sites")},
-        {"bookmarks", tr("Bookmarks")}, {"history", tr("History")},
-        {"stats", tr("Quick stats")},   {"privacy", tr("Privacy")},
-        {"notes", tr("Notes")},         {"weather", tr("Weather")},
-        {"clock", tr("Time")},          {"quickaccess", tr("Quick access")},
-    };
-    for (const Entry& entry : entries) {
-        QAction* action = menu.addAction(entry.label);
-        const QString type = QString::fromLatin1(entry.type);
-        connect(action, &QAction::triggered, this, [this, type] { addWidgetOfType(type); });
-    }
-    menu.exec(m_addButton->mapToGlobal(QPoint(0, m_addButton->height())));
-}
+    connect(m_field, &GlassField::trailingClicked, this, search);
+    connect(m_field, &GlassField::returnPressed, this, search);
 
-// A grab point of the card when a drag starts, so the widget never "jumps".
-void HomePage::beginDrag(HomeWidget* widget)
-{
-    m_dragWidget = widget;
-    const QPoint now = m_canvas->mapFromGlobal(QCursor::pos());
-    m_dragOffset = now - widget->geometry().topLeft();
-    widget->raise();
-}
+    m_pinsTitle = new QLabel(tr("PINNED"), this);
+    m_pinsTitle->setObjectName(QStringLiteral("pinsTitle"));
+    m_pinsTitle->setAlignment(Qt::AlignCenter);
+    QFont pinsFont = m_pinsTitle->font();
+    pinsFont.setPointSizeF(9.5);
+    pinsFont.setWeight(QFont::DemiBold);
+    pinsFont.setLetterSpacing(QFont::AbsoluteSpacing, 3.0);
+    m_pinsTitle->setFont(pinsFont);
 
-void HomePage::updateDrag(const QPoint& globalPos)
-{
-    if (!m_dragWidget) {
-        return;
-    }
-    const QPoint pos = m_canvas->mapFromGlobal(globalPos);
-    QPoint target = pos - m_dragOffset;
-    // Snap to a 8px grid so the arrangement stays tidy, then stay inside the
-    // canvas.
-    target.setX(qRound(qreal(target.x()) / 8.0) * 8);
-    target.setY(qRound(target.y() / 8.0) * 8);
-    const int maxX = qMax(0, m_canvas->width() - m_dragWidget->width());
-    const int maxY = qMax(0, m_canvas->height() - m_dragWidget->height());
-    target.setX(qBound(0, target.x(), maxX));
-    target.setY(qBound(0, target.y(), maxY));
-    m_dragWidget->move(target);
-}
+    m_pins = new PinnedSites(this);
+    connect(m_pins, &PinnedSites::openUrl, this, &HomePage::openUrl);
 
-void HomePage::finishDrag()
-{
-    if (m_dragWidget) {
-        const Placement previous = m_placements.value(m_dragWidget);
-        Placement placed = previous;
-        placed.x = static_cast<qreal>(m_dragWidget->geometry().x()) / qMax(1, m_canvas->width());
-        placed.w = static_cast<qreal>(m_dragWidget->geometry().width()) / qMax(1, m_canvas->width());
-        placed.y = m_dragWidget->geometry().y();
-        placed.h = m_dragWidget->geometry().height();
-        m_placements.insert(m_dragWidget, placed);
-        scheduleSave();
-    }
-    m_dragWidget = nullptr;
+    m_root->addWidget(m_wordmark, 0, Qt::AlignHCenter);
+    m_root->addSpacing(6);
+    m_root->addWidget(m_tagline, 0, Qt::AlignHCenter);
+    m_root->addSpacing(26);
+    m_root->addWidget(m_field, 0, Qt::AlignHCenter);
+    m_root->addSpacing(40);
+    m_root->addWidget(m_pinsTitle, 0, Qt::AlignHCenter);
+    m_root->addSpacing(14);
+    m_root->addWidget(m_pins, 0, Qt::AlignHCenter);
+    m_root->addStretch(2);
 }
 
 void HomePage::focusSearch()
 {
-    if (m_hero) {
-        m_hero->focusField();
+    m_field->setFocus(Qt::OtherFocusReason);
+    m_field->selectAll();
+}
+
+int HomePage::topSpacing() const
+{
+    // Keep the search block in the upper third on a short window, and roughly in
+    // the middle on a tall one.
+    return qMax(24, static_cast<int>(height() * 0.13));
+}
+
+void HomePage::resizeEvent(QResizeEvent* event)
+{
+    QWidget::resizeEvent(event);
+    if (m_root) {
+        m_root->setContentsMargins(0, topSpacing(), 0, 0);
     }
 }
 
@@ -447,25 +374,25 @@ void HomePage::paintEvent(QPaintEvent* event)
 {
     Q_UNUSED(event)
     QPainter painter(this);
-    const bool dark = Theme::isDark();
-    paintNightSky(painter, rect(), dark);
+    NightSky::paint(painter, size(), devicePixelRatioF());
 }
 
-void HomePage::resizeEvent(QResizeEvent* event)
+void HomePage::keyPressEvent(QKeyEvent* event)
 {
-    QWidget::resizeEvent(event);
-    if (m_addButton) {
-        m_addButton->move(width() - m_addButton->width() - 26, 30);
+    // Typing anywhere on the page goes to the search field, like a start page
+    // should.
+    if (event->key() == Qt::Key_Escape) {
+        m_field->clear();
+        return;
     }
-    layoutCanvas();
-}
-
-bool HomePage::eventFilter(QObject* watched, QEvent* event)
-{
-    if (watched == m_scroll->viewport() && event->type() == QEvent::Resize) {
-        layoutCanvas();
+    if (!event->text().isEmpty() && event->text().at(0).isPrint()
+        && event->text() != QLatin1String(" ")) {
+        m_field->setFocus(Qt::OtherFocusReason);
+        m_field->editor()->setText(event->text());
+        m_field->editor()->setCursorPosition(event->text().size());
+        return;
     }
-    return QWidget::eventFilter(watched, event);
+    QWidget::keyPressEvent(event);
 }
 
 }  // namespace yozora

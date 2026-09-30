@@ -1,7 +1,6 @@
 // SPDX-License-Identifier: MIT
 #include "browser/BrowserTab.h"
 
-#include "core/BookmarkStore.h"
 #include "core/HistoryStore.h"
 #include "core/SearchEngine.h"
 #include "core/Settings.h"
@@ -23,22 +22,19 @@ QUrl BrowserTab::startPageUrl()
     return QUrl(QStringLiteral("about:yozora"));
 }
 
-BrowserTab::BrowserTab(QWebEngineProfile* profile, Settings* settings,
-                       const HomeContext& context, QWidget* parent)
+BrowserTab::BrowserTab(QWebEngineProfile* profile, Settings* settings, HistoryStore* history,
+                       QWidget* parent)
     : QWidget(parent)
     , m_settings(settings)
-    , m_context(context)
+    , m_history(history)
 {
     m_stack = new QStackedWidget(this);
     m_stack->setContentsMargins(0, 0, 0, 0);
 
-    m_home = new HomePage(m_context, m_stack);
+    m_home = new HomePage(m_stack);
 
     m_view = new WebView(profile, m_stack);
     auto* page = qobject_cast<WebPage*>(m_view->page());
-    if (page) {
-        page->setDarkMode(m_dark);
-    }
 
     m_stack->addWidget(m_home);
     m_stack->addWidget(m_view);
@@ -73,10 +69,10 @@ BrowserTab::BrowserTab(QWebEngineProfile* profile, Settings* settings,
         connect(m_view, &WebView::statusMessage, this, &BrowserTab::statusMessage);
         connect(m_view, &QWebEngineView::loadFinished, this, [this](bool ok) {
             updateState();
-            if (ok && m_context.history) {
+            if (ok && m_history) {
                 const QUrl current = m_view->url();
                 if (current.isValid() && !current.isEmpty()) {
-                    m_context.history->record(current.toString(), m_view->title());
+                    m_history->record(current.toString(), m_view->title());
                 }
             }
         });
@@ -247,16 +243,6 @@ void BrowserTab::stop()
         return;
     }
     m_view->page()->triggerAction(QWebEnginePage::Stop);
-}
-
-void BrowserTab::setDarkMode(bool dark)
-{
-    m_dark = dark;
-    m_view->setDarkMode(dark);
-    if (auto* page = qobject_cast<WebPage*>(m_view->page())) {
-        page->setDarkMode(dark);
-    }
-    m_home->update();
 }
 
 void BrowserTab::updateTitle()

@@ -20,7 +20,7 @@ private slots:
     void squircleStaysInsideTheRect();
     void panelIsTranslucent();
     void chipIsRounded();
-    void darkAndLightRecipesDiffer();
+    void shadowStaysInsideItsMargin();
 };
 
 void TestGlass::squircleFillsItsCentre()
@@ -83,7 +83,7 @@ void TestGlass::squircleStaysInsideTheRect()
 
 void TestGlass::panelIsTranslucent()
 {
-    const auto recipe = Glass::recipe(true, 18);
+    const auto recipe = Glass::recipe(18);
     QVERIFY(recipe.fill.alpha() < 255);
     QVERIFY(recipe.fill.alpha() > 0);
 
@@ -100,7 +100,7 @@ void TestGlass::panelIsTranslucent()
 
 void TestGlass::chipIsRounded()
 {
-    const auto recipe = Glass::recipe(true, 18);
+    const auto recipe = Glass::recipe(18);
     QImage image(120, 40, QImage::Format_ARGB32_Premultiplied);
     image.fill(Qt::transparent);
     QPainter painter(&image);
@@ -112,15 +112,28 @@ void TestGlass::chipIsRounded()
     QVERIFY(image.pixelColor(60, 20).alpha() > 0);
 }
 
-void TestGlass::darkAndLightRecipesDiffer()
+void TestGlass::shadowStaysInsideItsMargin()
 {
-    const auto dark = Glass::recipe(true, 18);
-    const auto light = Glass::recipe(false, 18);
-    QVERIFY(dark.fill != light.fill);
-    QVERIFY(dark.highlight != light.highlight);
-    // Light glass is more opaque than dark glass, otherwise it disappears on
-    // a light background.
-    QVERIFY(light.fill.alpha() > dark.fill.alpha());
+    // A surface that clips its own shadow looks pressed into the page, so the
+    // blur has to land entirely inside the margin the caller reserves.
+    const auto recipe = Glass::recipe(18);
+    const QRectF pill(Glass::shadowMargin(), Glass::shadowMargin(),
+                       200 - 2 * Glass::shadowMargin(), 60 - 2 * Glass::shadowMargin());
+
+    QImage image(200, 60, QImage::Format_ARGB32_Premultiplied);
+    image.fill(Qt::transparent);
+    QPainter painter(&image);
+    Glass::paintShadow(painter, pill, recipe, 1.0);
+    painter.end();
+
+    // The blur lands just outside the pill...
+    QVERIFY2(image.pixelColor(100, 11).alpha() > 0, "no shadow above the pill");
+    QVERIFY2(image.pixelColor(100, 50).alpha() > 0, "no shadow below the pill");
+    // ...and nothing is cut off at the border of the widget.
+    QCOMPARE(image.pixelColor(0, 30).alpha(), 0);
+    QCOMPARE(image.pixelColor(199, 30).alpha(), 0);
+    QCOMPARE(image.pixelColor(100, 0).alpha(), 0);
+    QCOMPARE(image.pixelColor(100, 59).alpha(), 0);
 }
 
 QTEST_MAIN(TestGlass)

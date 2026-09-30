@@ -1,8 +1,6 @@
 // SPDX-License-Identifier: MIT
 //
-// The Yozora error page must never fall back to the Chromium page, and it must
-// follow the shell theme. Both are easy to break without noticing, so they are
-// asserted here rather than only by looking at the running browser.
+// The Yozora error page must never fall back to the Chromium page, and it must\n// carry the shell's own colours. Both are easy to break without noticing, so\n// they are asserted here rather than only by looking at the running browser.
 
 #include "core/Theme.h"
 #include "web/ErrorPage.h"
@@ -19,7 +17,7 @@ private slots:
     void producesACompleteDocument();
     void namesTheHostThatFailed();
     void escapesTheHost();
-    void darkAndLightDiffer();
+    void usesTheShellPalette();
     void titlesFollowTheFailure();
     void hintsExplainTheFailure();
 };
@@ -27,7 +25,7 @@ private slots:
 void TestErrorPage::producesACompleteDocument()
 {
     const QString html = ErrorPage::html(QUrl(QStringLiteral("https://example.com/x")), 0, 0,
-                                         QString(), true);
+                                         QString());
 
     QVERIFY(html.contains(QStringLiteral("<!DOCTYPE html>")));
     QVERIFY(html.contains(QStringLiteral("</html>")));
@@ -39,7 +37,7 @@ void TestErrorPage::namesTheHostThatFailed()
 {
     const QUrl url(QStringLiteral("https://no-such-host.invalid/a/b"));
     const QString html = ErrorPage::html(url, ErrorPage::DomainDns, ErrorPage::NameNotResolved,
-                                         QString(), true);
+                                         QString());
     QVERIFY(html.contains(QStringLiteral("no-such-host.invalid")));
     QVERIFY(!html.contains(QStringLiteral("a/b")));
 }
@@ -50,24 +48,22 @@ void TestErrorPage::escapesTheHost()
     // vector: it must never reach the document as markup.
     const QUrl url(QStringLiteral("https://evil.example/"));
     const QString html =
-        ErrorPage::html(url, 0, 0, QStringLiteral("<script>alert(1)</script>"), true);
+        ErrorPage::html(url, 0, 0, QStringLiteral("<script>alert(1)</script>"));
 
     QVERIFY(!html.contains(QStringLiteral("<script>alert(1)</script>")));
     QVERIFY(html.contains(QStringLiteral("&lt;script&gt;alert(1)&lt;/script&gt;")));
 }
 
-void TestErrorPage::darkAndLightDiffer()
+void TestErrorPage::usesTheShellPalette()
 {
     const QUrl url(QStringLiteral("https://example.com/"));
-    const QString dark = ErrorPage::html(url, 0, 0, QString(), true);
-    const QString light = ErrorPage::html(url, 0, 0, QString(), false);
+    const QString html = ErrorPage::html(url, 0, 0, QString());
 
-    const auto darkBg = Theme::darkColors().background;
-    const auto lightBg = Theme::lightColors().background;
+    const auto background = Theme::colors().background;
+    const auto text = Theme::colors().text;
 
-    QVERIFY2(dark.contains(darkBg), qPrintable("dark page misses " + darkBg));
-    QVERIFY2(light.contains(lightBg), qPrintable("light page misses " + lightBg));
-    QVERIFY(dark != light);
+    QVERIFY2(html.contains(background), qPrintable("error page misses " + background));
+    QVERIFY2(html.contains(text), qPrintable("error page misses " + text));
 }
 
 void TestErrorPage::titlesFollowTheFailure()

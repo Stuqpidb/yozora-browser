@@ -19,8 +19,6 @@ public:
 
     // Marks the home button as the current location.
     void setHomeActive(bool active);
-    // Repaints every icon for the current theme.
-    void setDarkTheme(bool dark);
 
 signals:
     void homeRequested();
@@ -29,7 +27,6 @@ signals:
     void downloadsRequested();
     void privateRequested();
     void settingsRequested();
-    void themeToggleRequested();
 
 private:
     RailButton* makeButton(RailButton* button, const QString& tooltip);
@@ -37,7 +34,6 @@ private:
     QVBoxLayout* m_layout = nullptr;
     QList<RailButton*> m_buttons;
     RailButton* m_homeButton = nullptr;
-    RailButton* m_themeButton = nullptr;
 };
 
 }  // namespace yozora

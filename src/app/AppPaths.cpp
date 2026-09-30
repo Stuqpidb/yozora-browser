@@ -54,7 +54,12 @@ QString AppPaths::historyPath()
     return stateDir() + QStringLiteral("/history.json");
 }
 
-QString AppPaths::homeLayoutPath()
+QString AppPaths::pinnedSitesPath()
+{
+    return stateDir() + QStringLiteral("/pinned-sites.json");
+}
+
+QString AppPaths::legacyHomeLayoutPath()
 {
     return stateDir() + QStringLiteral("/home.json");
 }

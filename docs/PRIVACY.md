@@ -33,7 +33,7 @@ Every network request the browser itself can make:
 | Feature | Request | When |
 |---|---|---|
 | Startup | none | Yozora never talks to the network on launch. |
-| New tab page | none | It is a native widget, not a downloaded page. |
+| Start page | none | It is a native widget painted locally, not a downloaded page. The night sky and the fonts are generated or bundled in the executable; nothing is fetched. |
 | Search | one request, straight to the chosen engine | When the user submits a search. |
 | Downloads | the file's own URL, as clicked | When the user downloads a file. |
 | Error pages | none | They are generated locally as HTML. |

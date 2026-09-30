@@ -30,8 +30,6 @@ public:
     void setErrorPageEnabled(bool enabled);
     [[nodiscard]] bool errorPageEnabled() const { return m_errorPageEnabled; }
 
-    void setDarkMode(bool dark);
-    [[nodiscard]] bool darkMode() const { return m_dark; }
 
     // Loads `url`, showing Yozora's error page if it cannot be reached.
     void loadUrl(const QUrl& url);
@@ -98,7 +96,6 @@ private:
     QUrl m_errorUrl;
     QString m_errorTitle;
     bool m_errorPageEnabled = true;
-    bool m_dark = true;
     bool m_loading = false;
     bool m_showingErrorPage = false;
     int m_progress = 0;

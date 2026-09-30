@@ -90,8 +90,6 @@ private:
     void showLibrary(bool bookmarks);
     SessionSnapshot snapshot() const;
     void restoreSnapshot(const SessionSnapshot& snap);
-    void applyTheme(bool dark);
-    [[nodiscard]] bool isDark() const;
 
     WebProfile* m_profile = nullptr;
     Settings* m_settings = nullptr;

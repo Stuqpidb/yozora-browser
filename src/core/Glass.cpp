@@ -1,8 +1,6 @@
 // SPDX-License-Identifier: MIT
 #include "core/Glass.h"
 
-#include "core/Theme.h"
-
 #include <QColor>
 #include <QGuiApplication>
 #include <QLinearGradient>
@@ -72,15 +70,14 @@ QColor withAlpha(const QColor& color, qreal alpha)
 
 }  // namespace
 
-Glass::Recipe Glass::recipe(bool dark, qreal radius)
+Glass::Recipe Glass::recipe(qreal radius)
 {
-    const auto c = dark ? Theme::darkColors() : Theme::lightColors();
     Recipe r;
-    r.fill = dark ? QColor(255, 255, 255, 16) : QColor(255, 255, 255, 150);
-    r.fillTop = dark ? QColor(255, 255, 255, 30) : QColor(255, 255, 255, 205);
-    r.stroke = dark ? QColor(255, 255, 255, 34) : QColor(20, 28, 55, 26);
-    r.highlight = dark ? QColor(255, 255, 255, 70) : QColor(255, 255, 255, 240);
-    r.shadow = dark ? QColor(0, 0, 0, 130) : QColor(18, 24, 44, 48);
+    r.fill = QColor(255, 255, 255, 16);
+    r.fillTop = QColor(255, 255, 255, 30);
+    r.stroke = QColor(255, 255, 255, 34);
+    r.highlight = QColor(255, 255, 255, 70);
+    r.shadow = QColor(0, 0, 0, 130);
     r.radius = radius;
     r.borderWidth = 1.0;
     r.grain = true;
@@ -120,19 +117,26 @@ QPainterPath Glass::squircle(const QRectF& rect, qreal radius)
 void Glass::paintShadow(QPainter& painter, const QRectF& rect, const Recipe& recipe, qreal opacity)
 {
     Q_UNUSED(recipe)
-    QColor shadow = QColor(0, 0, 0, 90);
+    QColor shadow = QColor(0, 0, 0, 96);
     if (opacity < 1.0) {
         shadow.setAlphaF(shadow.alphaF() * opacity);
     }
     // A few stacked, increasingly large rounded rects approximate a blur far
-    // better than one hard offset rect.
-    for (int i = 8; i >= 1; --i) {
-        const qreal spread = i * 1.6;
+    // better than one hard offset rect. The spread stays inside shadowMargin()
+    // so a widget that reserves that margin never has its shadow cut off at the
+    // edges - which is exactly what made the start-page search look dented.
+    constexpr int kLayers = 9;
+    constexpr qreal kSpread = 13.5;
+    painter.setPen(Qt::NoPen);
+    for (int i = kLayers; i >= 1; --i) {
+        const qreal spread = kSpread * i / kLayers;
         QColor layer = shadow;
-        layer.setAlphaF(shadow.alphaF() / 9.0 * opacity);
-        painter.setPen(Qt::NoPen);
+        layer.setAlphaF(shadow.alphaF() / kLayers * opacity);
         painter.setBrush(layer);
-        painter.drawRoundedRect(rect.adjusted(-spread, -spread * 0.4, spread, spread * 1.6),
+        // Wider than tall: the blur has to stay inside shadowMargin() on every
+        // side, which is what leaves the lower edge free for the direction the
+        // light comes from.
+        painter.drawRoundedRect(rect.adjusted(-spread, -spread * 0.45, spread, spread),
                                 rect.height() / 2 + spread, rect.height() / 2 + spread);
     }
 }
@@ -243,7 +247,7 @@ using SetWindowCompositionAttributeFn = BOOL(WINAPI*)(HWND, WindowCompositionAtt
 
 #endif  // Q_OS_WIN
 
-void Glass::applyWindowBackdrop(QWidget* window, bool dark)
+void Glass::applyWindowBackdrop(QWidget* window)
 {
     g_backdropActive = false;
     if (!window) {
@@ -262,8 +266,8 @@ void Glass::applyWindowBackdrop(QWidget* window, bool dark)
         return;
     }
 
-    // Keep the native title bar in step with the app theme.
-    const BOOL darkMode = dark ? TRUE : FALSE;
+    // Yozora is a dark-only product, so the native title bar always follows.
+    const BOOL darkMode = TRUE;
     DwmSetWindowAttribute(hwnd, DWMWA_USE_IMMERSIVE_DARK_MODE, &darkMode, sizeof(darkMode));
 
     // Windows 11 22H2+: the real system material.
@@ -297,7 +301,7 @@ void Glass::applyWindowBackdrop(QWidget* window, bool dark)
         AccentPolicy policy;
         policy.accentState = AccentEnableAcrylicBlurBehind;
         policy.accentFlags = AccentFlagNone;
-        policy.gradientColor = dark ? 0x00101010 : 0x00F0F0F0;  // BGR
+        policy.gradientColor = 0x00101010;  // BGR
         WindowCompositionAttributeData data;
         data.attribute = 19;  // WCA_ACCENT_POLICY
         data.data = &policy;

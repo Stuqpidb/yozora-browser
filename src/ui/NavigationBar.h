@@ -39,8 +39,6 @@ public:
     void setPrivateMode(bool enabled);
 
     // Repaints every control for the current theme.
-    void setDarkTheme(bool dark);
-
     // Shows a transient message next to the address bar.
     void showMessage(const QString& message);
     void showMessage(const QString& message, int timeoutMs);

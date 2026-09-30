@@ -43,7 +43,7 @@ public:
     };
 
     // Builds the glass recipe for the current theme.
-    [[nodiscard]] static Recipe recipe(bool dark, qreal radius = 18);
+    [[nodiscard]] static Recipe recipe(qreal radius = 18);
 
     // Fills a rounded rectangle with the translucent body, the top-lit
     // gradient and the specular hairline. Does not draw the shadow.
@@ -63,6 +63,11 @@ public:
     static void paintShadow(QPainter& painter, const QRectF& rect, const Recipe& recipe,
                             qreal opacity = 1.0);
 
+    // Empty space a surface has to reserve around itself for paintShadow() to
+    // land on. A widget that draws its panel at its own bounds clips the blur,
+    // so it must inset the panel by this much and size itself accordingly.
+    [[nodiscard]] static constexpr qreal shadowMargin() { return 16.0; }
+
     // The iOS-style "squircle": a superellipse. Used for the site tiles so they
     // read as icons rather than as rounded squares.
     [[nodiscard]] static QPainterPath squircle(const QRectF& rect, qreal radius);
@@ -74,7 +79,7 @@ public:
 
     // Requests the native window backdrop. Safe to call on any platform and any
     // window state; it does nothing where the effect is unavailable.
-    static void applyWindowBackdrop(QWidget* window, bool dark);
+    static void applyWindowBackdrop(QWidget* window);
 
     // True when the platform actually gave us a blurred backdrop.
     [[nodiscard]] static bool windowBackdropActive();

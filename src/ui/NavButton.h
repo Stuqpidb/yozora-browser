@@ -19,7 +19,6 @@ public:
     explicit NavButton(icons::Shape shape, const QString& tooltip, QWidget* parent = nullptr);
 
     void setShape(icons::Shape shape);
-    void setDarkTheme(bool dark);
 
     [[nodiscard]] QSize sizeHint() const override;
 
@@ -28,7 +27,6 @@ protected:
 
 private:
     icons::Shape m_shape;
-    bool m_dark = true;
 };
 
 }  // namespace yozora

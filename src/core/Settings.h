@@ -47,12 +47,6 @@ public:
     [[nodiscard]] bool askWhereToSave() const;
     void setAskWhereToSave(bool ask);
 
-    enum class ThemeMode { Dark, Light, System };
-    Q_ENUM(ThemeMode)
-
-    [[nodiscard]] ThemeMode themeMode() const;
-    void setThemeMode(ThemeMode mode);
-
     // How the mouse wheel scrolls a page.
     //   Instant - the engine jumps straight to the new position.
     //   Fast    - Yozora animates the wheel with a short, snappy curve
@@ -117,7 +111,6 @@ signals:
     void searchEngineChanged();
     void homePageChanged();
     void downloadDirectoryChanged();
-    void themeModeChanged();
     void scrollModeChanged();
     void cookiePolicyChanged();
     void trackerBlockingChanged();

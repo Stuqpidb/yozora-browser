@@ -133,15 +133,6 @@ void NavigationBar::setPrivateMode(bool enabled)
     m_privateBadge->setVisible(enabled);
 }
 
-void NavigationBar::setDarkTheme(bool dark)
-{
-    m_backButton->setDarkTheme(dark);
-    m_forwardButton->setDarkTheme(dark);
-    m_reloadButton->setDarkTheme(dark);
-    m_starButton->setDarkTheme(dark);
-    m_menuButton->setDarkTheme(dark);
-}
-
 void NavigationBar::showMessage(const QString& message)
 {
     showMessage(message, kMessageTimeoutMs);

@@ -47,20 +47,16 @@ WebView::WebView(QWebEngineProfile* profile, QWidget* parent)
 
 WebView::~WebView() = default;
 
-void WebView::setDarkMode(bool dark)
+void WebView::applyDarkPalette()
 {
+    // The renderer is a separate process with its own idea of colours, so the
+    // window palette has to be pushed into the view explicitly. Yozora has one
+    // theme, so this is set once instead of being toggled.
     auto viewPalette = palette();
-    if (dark) {
-        viewPalette.setColor(QPalette::Base, QColor(0x1a, 0x21, 0x2c));
-        viewPalette.setColor(QPalette::Text, QColor(0xe6, 0xea, 0xf2));
-        viewPalette.setColor(QPalette::Window, QColor(0x0d, 0x10, 0x17));
-        viewPalette.setColor(QPalette::WindowText, QColor(0xe6, 0xea, 0xf2));
-    } else {
-        viewPalette.setColor(QPalette::Base, QColor(0xff, 0xff, 0xff));
-        viewPalette.setColor(QPalette::Text, QColor(0x1a, 0x1f, 0x2b));
-        viewPalette.setColor(QPalette::Window, QColor(0xf4, 0xf6, 0xfa));
-        viewPalette.setColor(QPalette::WindowText, QColor(0x1a, 0x1f, 0x2b));
-    }
+    viewPalette.setColor(QPalette::Base, QColor(0x1a, 0x21, 0x2c));
+    viewPalette.setColor(QPalette::Text, QColor(0xe6, 0xea, 0xf2));
+    viewPalette.setColor(QPalette::Window, QColor(0x0d, 0x10, 0x17));
+    viewPalette.setColor(QPalette::WindowText, QColor(0xe6, 0xea, 0xf2));
     setPalette(viewPalette);
 }
 

@@ -7,6 +7,8 @@
 # Build output
 build/
 build-*/
+# Cache of the upstream variable fonts, an input to installer/make_fonts.py.
+# Only the static instances in resources/fonts/ are committed.
 dist/
 out/
 cmake-build-*/

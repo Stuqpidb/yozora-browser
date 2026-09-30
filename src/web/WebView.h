@@ -30,9 +30,6 @@ public:
     // "Save image as...").
     void saveUrlToFile(const QUrl& url, const QString& targetPath);
 
-    // Applies the Yozora palette to the widget, so form controls and
-    // scrollbars match the shell theme.
-    void setDarkMode(bool dark);
 
     // Selects how the mouse wheel scrolls. Only Settings::ScrollMode::Fast
     // makes this class animate anything; the other modes are handled by the
@@ -49,6 +46,10 @@ protected:
     void wheelEvent(QWheelEvent* event) override;
 
 private:
+    // Applies the Yozora palette to the widget, so form controls and scrollbars
+    // match the shell.
+    void applyDarkPalette();
+
     void buildContextMenu(QWebEngineContextMenuRequest* request, const QPoint& globalPos);
     void addNavigationActions(QMenu* menu);
     void addClipboardActions(QMenu* menu, QWebEngineContextMenuRequest* request);

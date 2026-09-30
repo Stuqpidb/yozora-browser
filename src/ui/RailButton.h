@@ -16,8 +16,6 @@ enum class RailIcon {
     Bookmarks,
     Downloads,
     Private,
-    Sun,
-    Moon,
     Settings,
 };
 
@@ -32,10 +30,6 @@ public:
     [[nodiscard]] RailIcon icon() const { return m_icon; }
     void setIcon(RailIcon icon);
 
-    // Paints with the current theme. Called by the window when the theme is
-    // switched, so the rail never has to be rebuilt.
-    void setDarkTheme(bool dark);
-
     [[nodiscard]] QSize sizeHint() const override;
 
 protected:
@@ -43,7 +37,6 @@ protected:
 
 private:
     RailIcon m_icon;
-    bool m_dark = true;
 };
 
 }  // namespace yozora

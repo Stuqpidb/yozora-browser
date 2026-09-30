@@ -29,8 +29,6 @@ public:
     [[nodiscard]] int currentIndex() const { return m_current; }
     [[nodiscard]] int count() const { return static_cast<int>(m_tabs.size()); }
 
-    void setDarkTheme(bool dark);
-
     [[nodiscard]] QSize sizeHint() const override;
     [[nodiscard]] QSize minimumSizeHint() const override;
 
@@ -61,7 +59,6 @@ private:
     int m_hover = -1;
     bool m_closeHover = false;
     bool m_plusHover = false;
-    bool m_dark = true;
 
     bool m_pressed = false;
     int m_pressIndex = -1;

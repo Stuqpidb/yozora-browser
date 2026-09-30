@@ -23,18 +23,11 @@ NavButton::NavButton(icons::Shape shape, const QString& tooltip, QWidget* parent
     setCursor(Qt::PointingHandCursor);
     setAttribute(Qt::WA_Hover, true);
     setFixedSize(kSize, kSize);
-    m_dark = Theme::isDark();
 }
 
 void NavButton::setShape(icons::Shape shape)
 {
     m_shape = shape;
-    update();
-}
-
-void NavButton::setDarkTheme(bool dark)
-{
-    m_dark = dark;
     update();
 }
 
@@ -49,13 +42,13 @@ void NavButton::paintEvent(QPaintEvent* event)
     QPainter painter(this);
     painter.setRenderHint(QPainter::Antialiasing, true);
 
-    const auto c = m_dark ? Theme::darkColors() : Theme::lightColors();
+    const auto c = Theme::colors();
     const QRectF pill = QRectF(rect()).adjusted(1, 1, -1, -1);
     const bool hover = underMouse() && isEnabled();
     const bool on = isChecked();
 
     if (hover || isDown() || on) {
-        Glass::Recipe glass = Glass::recipe(m_dark, pill.width() / 2.0);
+        Glass::Recipe glass = Glass::recipe(pill.width() / 2.0);
         if (isDown()) {
             // A pressed control gets a slightly deeper fill so the press is
             // visible without a border.
@@ -64,8 +57,8 @@ void NavButton::paintEvent(QPaintEvent* event)
         }
         if (on) {
             const QColor accent(c.accent);
-            glass.fill = QColor(accent.red(), accent.green(), accent.blue(), m_dark ? 40 : 34);
-            glass.stroke = QColor(accent.red(), accent.green(), accent.blue(), m_dark ? 110 : 80);
+            glass.fill = QColor(accent.red(), accent.green(), accent.blue(), 40);
+            glass.stroke = QColor(accent.red(), accent.green(), accent.blue(), 110);
         }
         Glass::paintPanel(painter, pill, glass, 1.0);
     }

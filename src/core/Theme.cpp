@@ -3,6 +3,8 @@
 
 #include <QApplication>
 #include <QColor>
+#include <QFile>
+#include <QFont>
 #include <QFontDatabase>
 #include <QPalette>
 #include <QStringList>
@@ -10,21 +12,42 @@
 namespace yozora {
 
 namespace {
-// Set once by apply(); read by every custom-painted widget.
-bool g_dark = true;
+
+// The bundled typefaces. installer/make_fonts.py bakes the weights the
+// interface uses out of the upstream variable fonts; see resources/fonts/OFL.txt
+// for the licence.
+const QStringList kTextFaces = {
+    QStringLiteral("Inter-Regular"),
+    QStringLiteral("Inter-Medium"),
+    QStringLiteral("Inter-SemiBold"),
+    QStringLiteral("Inter-Bold"),
+};
+const QStringList kDisplayFaces = {
+    QStringLiteral("SpaceGrotesk-Medium"),
+    QStringLiteral("SpaceGrotesk-Bold"),
+};
+
+// Picks the first family that actually made it into the font database, so a
+// failed font load degrades to the system face instead of a blank interface.
+QString firstAvailable(const QStringList& wanted, const QStringList& fallbacks)
+{
+    const QStringList available = QFontDatabase::families();
+    for (const QString& family : wanted) {
+        if (available.contains(family, Qt::CaseInsensitive)) {
+            return family;
+        }
+    }
+    for (const QString& family : fallbacks) {
+        if (available.contains(family, Qt::CaseInsensitive)) {
+            return family;
+        }
+    }
+    return QStringLiteral("sans-serif");
+}
+
 }  // namespace
 
-bool Theme::isDark()
-{
-    return g_dark;
-}
-
-void Theme::setDark(bool dark)
-{
-    g_dark = dark;
-}
-
-Theme::Colors Theme::darkColors()
+Theme::Colors Theme::colors()
 {
     return {
         /*background*/ QStringLiteral("#070a12"),
@@ -50,92 +73,88 @@ Theme::Colors Theme::darkColors()
     };
 }
 
-Theme::Colors Theme::lightColors()
-{
-    return {
-        /*background*/ QStringLiteral("#eef1f7"),
-        /*surface*/ QStringLiteral("#f7f9fc"),
-        /*surfaceHover*/ QStringLiteral("rgba(15, 25, 50, 0.055)"),
-        /*surfaceActive*/ QStringLiteral("rgba(15, 25, 50, 0.09)"),
-        /*tabActive*/ QStringLiteral("rgba(255, 255, 255, 0.92)"),
-        /*tabInactive*/ QStringLiteral("rgba(255, 255, 255, 0.45)"),
-        /*border*/ QStringLiteral("rgba(15, 25, 50, 0.10)"),
-        /*text*/ QStringLiteral("#131822"),
-        /*textMuted*/ QStringLiteral("#5c6678"),
-        /*accent*/ QStringLiteral("#2f6bd8"),
-        /*accent2*/ QStringLiteral("#6b53d6"),
-        /*accentText*/ QStringLiteral("#ffffff"),
-        /*danger*/ QStringLiteral("#c9372f"),
-        /*field*/ QStringLiteral("rgba(255, 255, 255, 0.85)"),
-        /*fieldText*/ QStringLiteral("#131822"),
-        /*shadow*/ QStringLiteral("rgba(16, 22, 40, 0.16)"),
-        /*rail*/ QStringLiteral("rgba(255, 255, 255, 0.55)"),
-        /*card*/ QStringLiteral("rgba(255, 255, 255, 0.66)"),
-        /*cardBorder*/ QStringLiteral("rgba(255, 255, 255, 0.75)"),
-        /*chip*/ QStringLiteral("rgba(15, 25, 50, 0.05)"),
-    };
-}
-
 QString Theme::accentGradient(const Colors& c)
 {
     return QStringLiteral("qlineargradient(x1:0, y1:0, x2:1, y2:1, stop:0 %1, stop:1 %2)")
         .arg(c.accent, c.accent2);
 }
 
-QString Theme::fontFamily()
+void Theme::loadFonts()
 {
-    const QStringList families = {
-        QStringLiteral("Segoe UI Variable Text"),
-        QStringLiteral("Segoe UI"),
-        QStringLiteral("Inter"),
-        QStringLiteral("Noto Sans"),
-    };
-    const QStringList available = QFontDatabase::families();
-    for (const auto& family : families) {
-        if (available.contains(family, Qt::CaseInsensitive)) {
-            return family;
+    static bool loaded = false;
+    if (loaded) {
+        return;
+    }
+    loaded = true;
+    // addApplicationFont() is handed the bytes rather than a path: the fonts
+    // live in the executable's resource bundle, and the file overload has to be
+    // told about the size or it will read a resource as if it were on disk.
+    for (const QStringList& faces : {kTextFaces, kDisplayFaces}) {
+        for (const QString& face : faces) {
+            QFile file(QStringLiteral(":/fonts/%1.ttf").arg(face));
+            if (file.open(QIODevice::ReadOnly)) {
+                QFontDatabase::addApplicationFont(file.readAll());
+            }
         }
     }
-    return QStringLiteral("sans-serif");
 }
 
-void Theme::apply(bool dark)
+QString Theme::fontFamily()
 {
-    g_dark = dark;
-    const auto colors = dark ? darkColors() : lightColors();
+    return firstAvailable({QStringLiteral("Inter")},
+                          {QStringLiteral("Segoe UI Variable Text"), QStringLiteral("Segoe UI")});
+}
+
+QString Theme::displayFamily()
+{
+    return firstAvailable({QStringLiteral("Space Grotesk")},
+                          {QStringLiteral("Segoe UI Variable Display"), QStringLiteral("Segoe UI")});
+}
+
+void Theme::apply()
+{
+    loadFonts();
+
+    const auto c = colors();
 
     QPalette palette;
-    const QColor window(colors.background);
-    const QColor base(colors.surface);
-    const QColor text(colors.text);
-    const QColor disabled(colors.textMuted);
-    const QColor highlight(colors.accent);
+    const QColor window(c.background);
+    const QColor base(c.surface);
+    const QColor text(c.text);
+    const QColor disabled(c.textMuted);
+    const QColor highlight(c.accent);
 
     palette.setColor(QPalette::Window, window);
     palette.setColor(QPalette::WindowText, text);
     palette.setColor(QPalette::Base, base);
-    palette.setColor(QPalette::AlternateBase, colors.surfaceHover);
-    palette.setColor(QPalette::ToolTipBase, colors.surface);
+    palette.setColor(QPalette::AlternateBase, c.surfaceHover);
+    palette.setColor(QPalette::ToolTipBase, c.surface);
     palette.setColor(QPalette::ToolTipText, text);
     palette.setColor(QPalette::Text, text);
     palette.setColor(QPalette::Button, base);
     palette.setColor(QPalette::ButtonText, text);
-    palette.setColor(QPalette::BrightText, colors.danger);
+    palette.setColor(QPalette::BrightText, c.danger);
     palette.setColor(QPalette::Link, highlight);
     palette.setColor(QPalette::Highlight, highlight);
-    palette.setColor(QPalette::HighlightedText, colors.accentText);
+    palette.setColor(QPalette::HighlightedText, c.accentText);
     palette.setColor(QPalette::PlaceholderText, disabled);
     palette.setColor(QPalette::Disabled, QPalette::Text, disabled);
     palette.setColor(QPalette::Disabled, QPalette::ButtonText, disabled);
     palette.setColor(QPalette::Disabled, QPalette::WindowText, disabled);
 
+    // A hinting and spacing pass on the bundled face: without it Qt picks the
+    // bitmap strike at small sizes and the text looks heavier than the design.
+    QFont font = QFont(fontFamily());
+    font.setHintingPreference(QFont::PreferFullHinting);
+    font.setStyleStrategy(QFont::PreferAntialias);
+    qApp->setFont(font);
     qApp->setPalette(palette);
-    qApp->setStyleSheet(styleSheet(dark));
+    qApp->setStyleSheet(styleSheet());
 }
 
-QString Theme::styleSheet(bool dark)
+QString Theme::styleSheet()
 {
-    const auto c = dark ? darkColors() : lightColors();
+    const auto c = colors();
     return QStringLiteral(R"(
 QWidget {
     color: %TEXT%;
@@ -171,7 +190,12 @@ QWidget#navigationBar {
         stop:0 %GLASS_TOP%, stop:1 %GLASS_TOP_EDGE%);
     border-bottom: 1px solid %BORDER%;
 }
-QLabel#brandLabel { color: %TEXT%; font-weight: 600; letter-spacing: 0.04em; }
+QLabel#brandLabel {
+    color: %TEXT%;
+    font-family: "%DISPLAY_FONT%";
+    font-weight: 600;
+    letter-spacing: 0.04em;
+}
 QLabel#privateBadge {
     color: %ACCENT_TEXT%;
     background: %ACCENT_GRADIENT%;
@@ -344,22 +368,38 @@ QScrollBar::handle:horizontal { background: %SURFACE_ACTIVE%; border-radius: 5px
 QScrollBar::add-line:horizontal, QScrollBar::sub-line:horizontal,
 QScrollBar::add-page:horizontal, QScrollBar::sub-page:horizontal { width: 0; background: none; }
 
-/* ---- Home page / dashboard ------------------------------------------ */
+/* ---- Home page --------------------------------------------------------- */
+/* The page paints the night sky itself, so nothing here may have a
+   background of its own. */
 QWidget#homePage { background: transparent; }
-QScrollArea#homeScroll { background: transparent; border: none; }
-QScrollArea#homeScroll > QWidget > QWidget { background: transparent; }
 
-/* HomeWidget::paintEvent() draws the glass card, including its drag and
-   drop-target states. */
-QFrame#homeCard { background: transparent; border: none; }
-QFrame#homeCard[hero="true"] { background: transparent; }
-QLabel#cardTitle { color: %TEXT%; font-weight: 600; }
-QLabel#cardSubtle { color: %TEXT_MUTED%; }
-QToolButton#cardMenu {
-    background: transparent; border: none; border-radius: 8px;
-    color: %TEXT_MUTED%; padding: 0;
+QLabel#heroWordmark {
+    color: %TEXT%;
+    background: transparent;
+    font-family: "%DISPLAY_FONT%";
 }
-QToolButton#cardMenu:hover { background: %SURFACE_HOVER%; color: %TEXT%; }
+QLabel#heroTagline { color: %TEXT_MUTED%; background: transparent; }
+QLabel#pinsTitle {
+    color: %TEXT_MUTED%;
+    background: transparent;
+    font-size: 11px;
+    letter-spacing: 0.16em;
+}
+
+/* Pinned sites stand straight on the sky: no card, no frame, just the icon
+   and its label, with a glass pill appearing only under the pointer. */
+QToolButton#siteTile {
+    background: transparent;
+    border: none;
+    border-radius: 16px;
+    color: %TEXT%;
+    padding: 8px 4px;
+    font-size: 12px;
+}
+QToolButton#siteTile:hover {
+    background: %SURFACE_HOVER%;
+    border: 1px solid %CARD_BORDER%;
+}
 
 /* GlassField paints its own surface and icons; the editor inside it only has
    to supply the text, so it must not draw a background or a frame of its own. */
@@ -372,27 +412,10 @@ QLineEdit#glassFieldEditor {
     font-size: 13px;
 }
 GlassField#heroSearch QLineEdit#glassFieldEditor { font-size: 15px; }
-
-QPushButton#chip {
-    background: %CHIP%;
-    border: 1px solid %CARD_BORDER%;
-    border-radius: 15px;
-    padding: 6px 15px;
-    color: %TEXT%;
-}
-QPushButton#chip:hover { background: %SURFACE_HOVER%; }
-
-QToolButton#siteTile {
-    background: %SURFACE%;
-    border: 1px solid %CARD_BORDER%;
-    border-radius: 15px;
-    color: %TEXT%;
-    padding: 8px 4px;
-    font-size: 12px;
-}
-QToolButton#siteTile:hover { background: %SURFACE_HOVER%; }
-
-QLabel#heroWordmark { color: %TEXT%; }
+/* The focus ring is drawn by GlassField itself, so the editor must not add a
+   second one of its own: two rings a pixel apart read as a printing error. */
+GlassField QLineEdit#glassFieldEditor:focus,
+GlassField QLineEdit#glassFieldEditor:focus:hover { border: none; }
 
 QPushButton#listRow {
     background: transparent;
@@ -404,18 +427,6 @@ QPushButton#listRow {
     font-size: 12px;
 }
 QPushButton#listRow:hover { background: %SURFACE_HOVER%; }
-
-QToolButton#cardAction {
-    color: %ACCENT%;
-    border-radius: 8px;
-    padding: 2px 10px;
-    font-size: 12px;
-}
-QToolButton#cardAction:hover { background: %SURFACE_HOVER%; }
-QLabel#statsValue { color: %TEXT%; font-weight: 600; }
-QLabel#privacyGlyph { color: %ACCENT%; }
-QLabel#clockTime { color: %TEXT%; font-size: 30px; font-weight: 300; background: transparent; }
-QLabel#clockDate { color: %TEXT_MUTED%; font-size: 12px; background: transparent; }
 
 QListWidget::item { padding: 7px 10px; border-radius: 8px; color: %TEXT%; }
 QListWidget::item:hover { background: %SURFACE_HOVER%; }
@@ -454,27 +465,20 @@ QListWidget#settingsNav::item:selected { background: %SURFACE_ACTIVE%; color: %T
         .replace(QStringLiteral("%FIELD%"), c.field)
         .replace(QStringLiteral("%FIELD_TEXT%"), c.fieldText)
         .replace(QStringLiteral("%RAIL%"), c.rail)
-        .replace(QStringLiteral("%GLASS_TOP%"),
-                 dark ? QStringLiteral("rgba(255, 255, 255, 0.055)")
-                      : QStringLiteral("rgba(255, 255, 255, 0.92)"))
-        .replace(QStringLiteral("%GLASS_TOP_EDGE%"),
-                 dark ? QStringLiteral("rgba(255, 255, 255, 0.018)")
-                      : QStringLiteral("rgba(255, 255, 255, 0.68)"))
-        .replace(QStringLiteral("%GLASS_RAIL%"),
-                 dark ? QStringLiteral("rgba(255, 255, 255, 0.035)")
-                      : QStringLiteral("rgba(255, 255, 255, 0.72)"))
-        .replace(QStringLiteral("%GLASS_RAIL_EDGE%"),
-                 dark ? QStringLiteral("rgba(255, 255, 255, 0.012)")
-                      : QStringLiteral("rgba(255, 255, 255, 0.5)"))
+        .replace(QStringLiteral("%GLASS_TOP%"), QStringLiteral("rgba(255, 255, 255, 0.055)"))
+        .replace(QStringLiteral("%GLASS_TOP_EDGE%"), QStringLiteral("rgba(255, 255, 255, 0.018)"))
+        .replace(QStringLiteral("%GLASS_RAIL%"), QStringLiteral("rgba(255, 255, 255, 0.035)"))
+        .replace(QStringLiteral("%GLASS_RAIL_EDGE%"), QStringLiteral("rgba(255, 255, 255, 0.012)"))
         .replace(QStringLiteral("%CARD%"), c.card)
         .replace(QStringLiteral("%CARD_BORDER%"), c.cardBorder)
         .replace(QStringLiteral("%CHIP%"), c.chip)
-        .replace(QStringLiteral("%FONT%"), fontFamily());
+        .replace(QStringLiteral("%FONT%"), fontFamily())
+        .replace(QStringLiteral("%DISPLAY_FONT%"), displayFamily());
 }
 
-QString Theme::htmlStyle(bool dark)
+QString Theme::htmlStyle()
 {
-    const auto c = dark ? darkColors() : lightColors();
+    const auto c = colors();
     return QStringLiteral(R"(
 :root {
   --bg: %BG%;
@@ -505,7 +509,8 @@ a:hover { text-decoration: underline; }
         .replace(QStringLiteral("%TEXT_MUTED%"), c.textMuted)
         .replace(QStringLiteral("%ACCENT%"), c.accent)
         .replace(QStringLiteral("%ACCENT_TEXT%"), c.accentText)
-        .replace(QStringLiteral("%FONT%"), fontFamily());
+        .replace(QStringLiteral("%FONT%"), fontFamily())
+        .replace(QStringLiteral("%DISPLAY_FONT%"), displayFamily());
 }
 
 }  // namespace yozora

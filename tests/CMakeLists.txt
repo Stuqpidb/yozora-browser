@@ -9,6 +9,7 @@ set(YOZORA_TESTS
     tst_tabwidget
     tst_errorpage
     tst_glass
+    tst_nightsky
 )
 
 # Qt's shared libraries live next to the Qt installation, not next to the test

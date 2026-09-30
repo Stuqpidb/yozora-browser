@@ -13,8 +13,6 @@ namespace yozora {
 class SettingsPrivate {
 public:
     QSettings store;
-    Settings::ThemeMode cachedTheme = Settings::ThemeMode::Dark;
-    bool cacheValid = false;
 };
 
 namespace {
@@ -24,7 +22,6 @@ constexpr auto kKeyCustomSearchUrl = "browser/custom_search_url";
 constexpr auto kKeyHomePage = "browser/home_page";
 constexpr auto kKeyDownloadDir = "downloads/directory";
 constexpr auto kKeyAskWhereToSave = "downloads/ask_where_to_save";
-constexpr auto kKeyThemeMode = "appearance/theme_mode";
 constexpr auto kKeyScrollMode = "appearance/scroll_mode";
 constexpr auto kKeyWindowGeometry = "window/geometry";
 constexpr auto kKeyWindowState = "window/state";
@@ -165,29 +162,6 @@ bool Settings::askWhereToSave() const
 void Settings::setAskWhereToSave(bool ask)
 {
     d->store.setValue(QLatin1String(kKeyAskWhereToSave), ask);
-}
-
-Settings::ThemeMode Settings::themeMode() const
-{
-    if (!d->cacheValid) {
-        const int raw = d->store.value(QLatin1String(kKeyThemeMode),
-                                       static_cast<int>(ThemeMode::Dark))
-                            .toInt();
-        d->cachedTheme = (raw >= 0 && raw <= 2) ? static_cast<ThemeMode>(raw) : ThemeMode::Dark;
-        d->cacheValid = true;
-    }
-    return d->cachedTheme;
-}
-
-void Settings::setThemeMode(ThemeMode mode)
-{
-    if (themeMode() == mode) {
-        return;
-    }
-    d->store.setValue(QLatin1String(kKeyThemeMode), static_cast<int>(mode));
-    d->cachedTheme = mode;
-    d->cacheValid = true;
-    emit themeModeChanged();
 }
 
 QByteArray Settings::windowGeometry() const
@@ -355,11 +329,9 @@ Settings::WebRtcPolicy Settings::bootWebRtcPolicy()
 void Settings::resetToDefaults()
 {
     d->store.clear();
-    d->cacheValid = false;
     emit searchEngineChanged();
     emit homePageChanged();
     emit downloadDirectoryChanged();
-    emit themeModeChanged();
     emit scrollModeChanged();
     emit cookiePolicyChanged();
     emit trackerBlockingChanged();

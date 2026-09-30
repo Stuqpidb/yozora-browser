@@ -32,7 +32,7 @@ private:
     QWidget* buildStartupSection();
     QWidget* buildDownloadsSection();
     QWidget* buildPrivacySection();
-    QWidget* buildAppearanceSection();
+    QWidget* buildScrollingSection();
     QWidget* buildDataSection();
     QWidget* buildAboutSection();
 
@@ -68,9 +68,6 @@ private:
     QCheckBox* m_sendDnt = nullptr;
     QCheckBox* m_notifications = nullptr;
     QComboBox* m_webrtcPolicy = nullptr;
-
-    QRadioButton* m_darkTheme = nullptr;
-    QRadioButton* m_lightTheme = nullptr;
     QComboBox* m_scrollMode = nullptr;
 
     QLabel* m_storagePath = nullptr;

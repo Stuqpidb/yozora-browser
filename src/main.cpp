@@ -132,7 +132,7 @@ int main(int argc, char* argv[])
     WebProfile::purgeSiteStorageIfRequested();
 
     Settings settings;
-    Theme::apply(settings.themeMode() != Settings::ThemeMode::Light);
+    Theme::apply();
 
     WebProfile profile(&settings);
     BookmarkStore bookmarks;

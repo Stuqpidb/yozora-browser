@@ -74,13 +74,15 @@ add_library(yozora_core STATIC
     src/browser/BrowserWindow.h
     src/core/BookmarkStore.cpp
     src/core/BookmarkStore.h
+    src/core/Glass.cpp
+    src/core/Glass.h
     src/core/HistoryStore.cpp
     src/core/HistoryStore.h
+    src/core/NightSky.cpp
+    src/core/NightSky.h
     src/core/SearchEngine.cpp
     src/core/SearchEngine.h
     src/core/Settings.cpp
-    src/core/Glass.cpp
-    src/core/Glass.h
     src/core/Settings.h
     src/core/Theme.cpp
     src/core/Theme.h
@@ -88,12 +90,6 @@ add_library(yozora_core STATIC
     src/core/UpdateChecker.h
     src/home/HomePage.cpp
     src/home/HomePage.h
-    src/home/FlowLayout.cpp
-    src/home/FlowLayout.h
-    src/home/HomeWidget.cpp
-    src/home/HomeWidget.h
-    src/home/HomeWidgets.cpp
-    src/home/HomeWidgets.h
     src/privacy/DownloadSafety.cpp
     src/privacy/DownloadSafety.h
     src/privacy/PermissionManager.cpp
@@ -108,10 +104,6 @@ add_library(yozora_core STATIC
     src/ui/ClearBrowsingDataDialog.h
     src/ui/GlassField.cpp
     src/ui/GlassField.h
-    src/ui/IconButton.cpp
-    src/ui/IconButton.h
-    src/ui/IconLabel.cpp
-    src/ui/IconLabel.h
     src/ui/Icons.h
     src/ui/NavigationBar.cpp
     src/ui/NavigationBar.h

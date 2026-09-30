@@ -39,11 +39,6 @@ void WebPage::setErrorPageEnabled(bool enabled)
     settings()->setAttribute(QWebEngineSettings::ErrorPageEnabled, !enabled);
 }
 
-void WebPage::setDarkMode(bool dark)
-{
-    m_dark = dark;
-}
-
 bool WebPage::isTransientScheme(const QUrl& url)
 {
     const QString scheme = url.scheme();
@@ -68,7 +63,7 @@ void WebPage::showErrorPage(const QUrl& url, int errorDomain, int errorCode,
     m_showingErrorPage = true;
     m_errorUrl = url;
     m_errorTitle = ErrorPage::titleFor(errorDomain, errorCode);
-    setHtml(ErrorPage::html(url, errorDomain, errorCode, errorText, m_dark),
+    setHtml(ErrorPage::html(url, errorDomain, errorCode, errorText),
             QUrl(QStringLiteral("yozora-error://error")));
     m_showingErrorPage = false;
 }
