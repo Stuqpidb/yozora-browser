@@ -31,11 +31,11 @@ BEGIN
         BEGIN
             VALUE "CompanyName",      "The Yozora Browser Authors"
             VALUE "FileDescription",  "Yozora Browser"
-            VALUE "FileVersion",      "0.1.0.0"
+            VALUE "FileVersion",      "0.2.0.0"
             VALUE "InternalName",     "Yozora"
             VALUE "OriginalFilename", "Yozora.exe"
             VALUE "ProductName",      "Yozora Browser"
-            VALUE "ProductVersion",   "0.1.0.0"
+            VALUE "ProductVersion",   "0.2.0.0"
         END
     END
     BLOCK "VarFileInfo"
