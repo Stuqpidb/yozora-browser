@@ -146,13 +146,12 @@ HomePage::HomePage(const HomeContext& context, QWidget* parent)
 
     m_addButton = new QToolButton(this);
     m_addButton->setObjectName(QStringLiteral("navButton"));
-    m_addButton->setText(QStringLiteral("+"));
+    m_addButton->setToolButtonStyle(Qt::ToolButtonIconOnly);
+    m_addButton->setIcon(icons::icon(icons::Shape::Plus, 20, QColor(Theme::isDark()
+        ? Theme::darkColors().textMuted : Theme::lightColors().textMuted)));
     m_addButton->setToolTip(tr("Add a widget"));
     m_addButton->setCursor(Qt::PointingHandCursor);
     m_addButton->setFixedSize(40, 40);
-    QFont plusFont = m_addButton->font();
-    plusFont.setPointSizeF(18);
-    m_addButton->setFont(plusFont);
     m_addButton->raise();
     connect(m_addButton, &QToolButton::clicked, this, &HomePage::showAddMenu);
 

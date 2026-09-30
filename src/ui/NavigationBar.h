@@ -1,21 +1,23 @@
 // SPDX-License-Identifier: MIT
 #pragma once
 
+#include "ui/Icons.h"
+
 #include <QPoint>
 #include <QWidget>
 
 class QHBoxLayout;
 class QLabel;
 class QProgressBar;
-class QToolButton;
 class QVBoxLayout;
 
 namespace yozora {
 
 class AddressBar;
+class NavButton;
 
 // Top navigation bar: back / forward / reload on the left, the Yozora address
-// pill in the middle, then the bookmark star and the menu on the right. Button
+// field in the middle, then the bookmark star and the menu on the right. Button
 // states are driven entirely by the active tab's signals.
 class NavigationBar : public QWidget {
     Q_OBJECT
@@ -36,6 +38,9 @@ public:
     // Shows or hides the "PRIVATE" badge for private browsing windows.
     void setPrivateMode(bool enabled);
 
+    // Repaints every control for the current theme.
+    void setDarkTheme(bool dark);
+
     // Shows a transient message next to the address bar.
     void showMessage(const QString& message);
     void showMessage(const QString& message, int timeoutMs);
@@ -49,16 +54,15 @@ signals:
     void menuRequested(const QPoint& globalPos);
 
 private:
-    QToolButton* makeButton(const QString& objectName, const QString& glyph,
-                            const QString& tooltip);
+    NavButton* makeButton(icons::Shape shape, const QString& tooltip);
 
     QHBoxLayout* m_layout = nullptr;
     QLabel* m_privateBadge = nullptr;
-    QToolButton* m_backButton = nullptr;
-    QToolButton* m_forwardButton = nullptr;
-    QToolButton* m_reloadButton = nullptr;
-    QToolButton* m_starButton = nullptr;
-    QToolButton* m_menuButton = nullptr;
+    NavButton* m_backButton = nullptr;
+    NavButton* m_forwardButton = nullptr;
+    NavButton* m_reloadButton = nullptr;
+    NavButton* m_starButton = nullptr;
+    NavButton* m_menuButton = nullptr;
 
     QWidget* m_addressContainer = nullptr;
     QVBoxLayout* m_addressLayout = nullptr;

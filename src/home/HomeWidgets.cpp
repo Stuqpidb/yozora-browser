@@ -1,7 +1,11 @@
 // SPDX-License-Identifier: MIT
 #include "core/Glass.h"
 #include "home/FlowLayout.h"
+#include "ui/GlassField.h"
+#include "ui/IconLabel.h"
 #include "home/HomeWidgets.h"
+
+#include "core/Theme.h"
 
 #include "core/BookmarkStore.h"
 #include "core/HistoryStore.h"
@@ -122,13 +126,21 @@ SearchWidget::SearchWidget(const HomeContext& context, QWidget* parent)
     tagline->setObjectName(QStringLiteral("cardSubtle"));
     tagline->setAlignment(Qt::AlignCenter);
 
-    m_field = new QLineEdit(body());
+    m_field = new GlassField(body());
     m_field->setObjectName(QStringLiteral("heroSearch"));
     m_field->setPlaceholderText(tr("Search the web or enter a URL..."));
-    m_field->setMinimumWidth(480);
-    m_field->setMaximumWidth(600);
-    m_field->setFixedHeight(50);
-    connect(m_field, &QLineEdit::returnPressed, this, [this] {
+    m_field->setHeroMode(true);
+    m_field->setRadius(28.0);
+    m_field->setTrailing(GlassField::Trailing::Arrow);
+    m_field->setFixedSize(600, 56);
+    m_field->setFocusPolicy(Qt::StrongFocus);
+    connect(m_field, &GlassField::trailingClicked, this, [this] {
+        const QString text = m_field->text().trimmed();
+        if (!text.isEmpty()) {
+            emit searchRequested(text);
+        }
+    });
+    connect(m_field, &GlassField::returnPressed, this, [this] {
         const QString text = m_field->text().trimmed();
         if (!text.isEmpty()) {
             emit searchRequested(text);
@@ -220,14 +232,12 @@ void SitesWidget::rebuild()
 
     auto* add = new QToolButton(body());
     add->setObjectName(QStringLiteral("siteTile"));
-    add->setToolButtonStyle(Qt::ToolButtonTextOnly);
-    add->setText(QStringLiteral("+"));
+    add->setToolButtonStyle(Qt::ToolButtonIconOnly);
+    add->setIcon(icons::icon(icons::Shape::Plus, 34, QColor(Theme::isDark()
+        ? Theme::darkColors().textMuted : Theme::lightColors().textMuted)));
     add->setToolTip(tr("Add a site"));
     add->setCursor(Qt::PointingHandCursor);
     add->setFixedSize(92, 86);
-    QFont addFont = add->font();
-    addFont.setPointSizeF(20);
-    add->setFont(addFont);
     connect(add, &QToolButton::clicked, this, &SitesWidget::addSiteDialog);
     m_grid->addWidget(add, index / kColumns, index % kColumns);
 
@@ -700,8 +710,11 @@ void QuickAccessWidget::rebuild()
         layout->addWidget(chip);
     }
 
-    auto* add = new QPushButton(QStringLiteral("+"), m_row);
+    auto* add = new QPushButton(m_row);
     add->setObjectName(QStringLiteral("chip"));
+    add->setIcon(icons::icon(icons::Shape::Plus, 18, QColor(Theme::isDark()
+        ? Theme::darkColors().textMuted : Theme::lightColors().textMuted)));
+    add->setIconSize(QSize(18, 18));
     add->setToolTip(tr("Add a shortcut"));
     add->setCursor(Qt::PointingHandCursor);
     connect(add, &QPushButton::clicked, this, &QuickAccessWidget::addShortcutDialog);
@@ -771,10 +784,10 @@ StatsWidget::StatsWidget(const HomeContext& context, QWidget* parent)
 {
     setTitle(tr("Quick stats"));
 
-    bodyLayout()->addWidget(makeRow(tr("Total tabs"), &m_tabs, QStringLiteral("\u25A2")));
-    bodyLayout()->addWidget(makeRow(tr("Bookmarks"), &m_bookmarks, QStringLiteral("\u2691")));
-    bodyLayout()->addWidget(makeRow(tr("History"), &m_history, QStringLiteral("\u25F7")));
-    bodyLayout()->addWidget(makeRow(tr("Trackers blocked"), &m_blocked, QStringLiteral("\u25C8")));
+    bodyLayout()->addWidget(makeRow(tr("Total tabs"), &m_tabs, icons::Shape::Stop));
+    bodyLayout()->addWidget(makeRow(tr("Bookmarks"), &m_bookmarks, icons::Shape::Bookmark));
+    bodyLayout()->addWidget(makeRow(tr("History"), &m_history, icons::Shape::Clock));
+    bodyLayout()->addWidget(makeRow(tr("Trackers blocked"), &m_blocked, icons::Shape::Shield));
     bodyLayout()->addStretch(1);
 
     if (context.bookmarks) {
@@ -790,15 +803,15 @@ StatsWidget::StatsWidget(const HomeContext& context, QWidget* parent)
     refresh();
 }
 
-QWidget* StatsWidget::makeRow(const QString& label, QLabel** valueOut, const QString& glyph)
+QWidget* StatsWidget::makeRow(const QString& label, QLabel** valueOut, icons::Shape shape)
 {
     auto* row = new QWidget(body());
     auto* layout = new QHBoxLayout(row);
     layout->setContentsMargins(0, 0, 0, 0);
     layout->setSpacing(10);
 
-    auto* glyphLabel = new QLabel(glyph, row);
-    glyphLabel->setObjectName(QStringLiteral("cardSubtle"));
+    auto* glyphLabel = new IconLabel(shape, row);
+    glyphLabel->setIconSize(16);
     layout->addWidget(glyphLabel);
 
     auto* text = new QLabel(label, row);

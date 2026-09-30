@@ -1,6 +1,9 @@
 // SPDX-License-Identifier: MIT
 #include "home/HomeWidget.h"
 
+#include "ui/IconButton.h"
+#include "ui/IconLabel.h"
+
 #include "core/Glass.h"
 #include "core/Theme.h"
 
@@ -43,8 +46,7 @@ HomeWidget::HomeWidget(const HomeContext& context, QWidget* parent)
     header->setSpacing(8);
     m_header = header;
 
-    m_handle = new QLabel(QStringLiteral("\u28FF"), this);
-    m_handle->setObjectName(QStringLiteral("cardSubtle"));
+    m_handle = new IconLabel(icons::Shape::Drag, this);
     m_handle->setToolTip(tr("Drag to move"));
     header->addWidget(m_handle);
 
@@ -53,14 +55,10 @@ HomeWidget::HomeWidget(const HomeContext& context, QWidget* parent)
     header->addWidget(m_title);
     header->addStretch(1);
 
-    m_menuButton = new QToolButton(this);
-    m_menuButton->setObjectName(QStringLiteral("cardMenu"));
-    m_menuButton->setText(QStringLiteral("\u22EF"));
+    m_menuButton = new IconButton(icons::Shape::More, this);
     m_menuButton->setToolTip(tr("Widget options"));
-    m_menuButton->setCursor(Qt::PointingHandCursor);
-    m_menuButton->setFixedSize(26, 26);
-    m_menuButton->setFocusPolicy(Qt::NoFocus);
-    connect(m_menuButton, &QToolButton::clicked, this, [this] {
+    m_menuButton->setIconSize(18);
+    connect(m_menuButton, &IconButton::clicked, this, [this] {
         showCardMenu(m_menuButton->mapToGlobal(QPoint(0, m_menuButton->height())));
     });
     header->addWidget(m_menuButton);

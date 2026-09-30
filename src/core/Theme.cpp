@@ -195,15 +195,11 @@ QToolButton#navButton:pressed { background: %SURFACE_ACTIVE%; }
 QToolButton#navButton:disabled { color: %TEXT_MUTED%; }
 
 /* ---- Address bar ----------------------------------------------------- */
-/* The pill itself is painted in AddressBar::paintEvent() as glass, so the
+/* The pill itself is painted in GlassField::paintEvent() as glass, so the
    style sheet must leave the background alone. */
-QLineEdit#addressBar {
+GlassField#addressBar {
     background: transparent;
     border: none;
-    color: %FIELD_TEXT%;
-    padding: 7px 18px;
-    selection-background-color: %ACCENT%;
-    selection-color: %ACCENT_TEXT%;
 }
 
 QProgressBar#pageProgress { background: transparent; border: none; }
@@ -365,15 +361,17 @@ QToolButton#cardMenu {
 }
 QToolButton#cardMenu:hover { background: %SURFACE_HOVER%; color: %TEXT%; }
 
-QLineEdit#heroSearch {
-    background: %FIELD%;
-    color: %FIELD_TEXT%;
-    border: 1px solid %BORDER%;
-    border-radius: 24px;
-    padding: 12px 22px;
-    font-size: 14px;
+/* GlassField paints its own surface and icons; the editor inside it only has
+   to supply the text, so it must not draw a background or a frame of its own. */
+QLineEdit#glassFieldEditor {
+    background: transparent;
+    border: none;
+    color: %TEXT%;
+    selection-background-color: %ACCENT%;
+    selection-color: %TEXT_ON_ACCENT%;
+    font-size: 13px;
 }
-QLineEdit#heroSearch:focus { border-color: %ACCENT%; }
+GlassField#heroSearch QLineEdit#glassFieldEditor { font-size: 15px; }
 
 QPushButton#chip {
     background: %CHIP%;
@@ -394,9 +392,9 @@ QToolButton#siteTile {
 }
 QToolButton#siteTile:hover { background: %SURFACE_HOVER%; }
 
-QFrame#homeCard[hero="true"] { background: transparent; }
-
 QLabel#heroWordmark { color: %TEXT%; }
+
+QPushButton#listRow {
     background: transparent;
     border: none;
     border-radius: 9px;

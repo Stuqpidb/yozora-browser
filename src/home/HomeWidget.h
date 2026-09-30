@@ -12,11 +12,13 @@
 
 class QLabel;
 class QMouseEvent;
-class QToolButton;
 class QVBoxLayout;
 class QHBoxLayout;
 
 namespace yozora {
+
+class IconButton;
+class IconLabel;
 
 class BookmarkStore;
 class HistoryStore;
@@ -97,9 +99,9 @@ private:
 
     HomeContext m_context;
     QLabel* m_title = nullptr;
-    QToolButton* m_menuButton = nullptr;
+    IconButton* m_menuButton = nullptr;
     QHBoxLayout* m_header = nullptr;
-    QLabel* m_handle = nullptr;
+    IconLabel* m_handle = nullptr;
     QWidget* m_body = nullptr;
     QSize m_cardSize = QSize(360, 260);
 

@@ -1,73 +1,27 @@
 // SPDX-License-Identifier: MIT
 #include "ui/AddressBar.h"
 
-#include "core/Glass.h"
-#include "core/Theme.h"
 #include "utils/UrlUtils.h"
 
 #include <QFocusEvent>
-#include <QFont>
-#include <QLinearGradient>
-#include <QPaintEvent>
-#include <QPainter>
-#include <QPen>
 
 namespace yozora {
 
 AddressBar::AddressBar(QWidget* parent)
-    : QLineEdit(parent)
+    : GlassField(parent)
 {
+    setObjectName(QStringLiteral("addressBar"));
     setPlaceholderText(tr("Search or enter address"));
-    setClearButtonEnabled(false);
-    // Room for the painted magnifier on the left and the "go" arrow on the right.
-    setTextMargins(32, 0, 34, 0);
+    setTrailing(Trailing::Arrow);
+    setRadius(20.0);
 
-    connect(this, &QLineEdit::returnPressed, this, &AddressBar::submit);
-}
-
-void AddressBar::paintEvent(QPaintEvent* event)
-{
-    const bool dark = Theme::isDark();
-    const Theme::Colors c = dark ? Theme::darkColors() : Theme::lightColors();
-    const Glass::Recipe glass = Glass::recipe(dark, height() / 2.0);
-
-    QPainter glassPainter(this);
-    glassPainter.setRenderHint(QPainter::Antialiasing, true);
-    const QRectF pill(0.5, 0.5, width() - 1.0, height() - 1.0);
-    Glass::paintShadow(glassPainter, pill, glass, 0.7);
-    Glass::paintPanel(glassPainter, pill, glass, 1.0);
-
-    // A quiet focus ring on top of the glass, so the field still reads as
-    // focused without losing the material.
-    if (hasFocus()) {
-        glassPainter.setBrush(Qt::NoBrush);
-        glassPainter.setPen(QPen(QColor(c.accent), 1.3));
-        glassPainter.drawRoundedRect(pill.adjusted(0.5, 0.5, -0.5, -0.5), height() / 2.0,
-                                     height() / 2.0);
-    }
-
-    QLineEdit::paintEvent(event);
-
-    QPainter painter(this);
-    painter.setRenderHint(QPainter::Antialiasing, true);
-
-    const QColor muted = palette().color(QPalette::PlaceholderText);
-    const QColor accent = palette().color(QPalette::Link);
-    const int cy = height() / 2;
-
-    // Leading magnifier.
-    painter.setBrush(Qt::NoBrush);
-    painter.setPen(QPen(muted, 1.7));
-    painter.drawEllipse(QRectF(14, cy - 6.0, 10.5, 10.5));
-    painter.drawLine(QPointF(22.5, cy + 2.5), QPointF(27, cy + 7));
-
-    // Trailing "go" arrow.
-    QFont arrowFont = font();
-    arrowFont.setPointSizeF(13.0);
-    painter.setFont(arrowFont);
-    painter.setPen(accent);
-    painter.drawText(QRect(width() - 36, 0, 24, height()), Qt::AlignCenter,
-                     QStringLiteral("\u2192"));
+    connect(this, &GlassField::returnPressed, this, &AddressBar::submit);
+    connect(this, &GlassField::trailingClicked, this, &AddressBar::submit);
+    connect(this, &GlassField::editorFocused, this, [this] {
+        if (!m_internalUpdate) {
+            selectAll();
+        }
+    });
 }
 
 void AddressBar::displayUrl(const QUrl& url)
@@ -99,14 +53,6 @@ void AddressBar::focusAndSelectAll()
 {
     setFocus(Qt::ShortcutFocusReason);
     selectAll();
-}
-
-void AddressBar::focusInEvent(QFocusEvent* event)
-{
-    QLineEdit::focusInEvent(event);
-    if (!m_internalUpdate) {
-        selectAll();
-    }
 }
 
 void AddressBar::submit()

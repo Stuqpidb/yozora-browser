@@ -2,6 +2,7 @@
 #pragma once
 
 #include "home/HomeWidget.h"
+#include "ui/Icons.h"
 
 #include <QJsonArray>
 #include <QList>
@@ -9,6 +10,7 @@
 #include <QUrl>
 
 class QLabel;
+class GlassField;
 class QLineEdit;
 class QNetworkAccessManager;
 class QNetworkReply;
@@ -32,7 +34,8 @@ public:
 signals:
     void searchRequested(const QString& text);
 private:
-    QLineEdit* m_field = nullptr;
+    // The same glass field the toolbar uses, in its larger start-page size.
+    GlassField* m_field = nullptr;
 };
 
 // Pinned sites as a grid of rounded tiles.
@@ -175,7 +178,7 @@ public:
     [[nodiscard]] QSize sizeHint() const override;
 private:
     void refresh();
-    QWidget* makeRow(const QString& label, QLabel** valueOut, const QString& glyph);
+    QWidget* makeRow(const QString& label, QLabel** valueOut, icons::Shape shape);
     QLabel* m_tabs = nullptr;
     QLabel* m_bookmarks = nullptr;
     QLabel* m_history = nullptr;

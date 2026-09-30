@@ -3,6 +3,7 @@
 
 #include "core/Glass.h"
 #include "core/Theme.h"
+#include "ui/Icons.h"
 
 #include <QFontMetrics>
 #include <QLinearGradient>
@@ -217,7 +218,8 @@ void TabStrip::paintEvent(QPaintEvent*)
             QFont closeFont = font();
             closeFont.setPointSizeF(9.0);
             painter.setFont(closeFont);
-            painter.drawText(close, Qt::AlignCenter, QStringLiteral("\u2715"));
+            icons::draw(painter, icons::Shape::Close, QRectF(close).adjusted(3, 3, -3, -3),
+                        QColor(c.textMuted), 1.6);
         }
     }
 
