@@ -1,9 +1,11 @@
 // SPDX-License-Identifier: MIT
 #include "browser/BrowserTab.h"
 
+#include "core/BookmarkStore.h"
+#include "core/HistoryStore.h"
 #include "core/SearchEngine.h"
 #include "core/Settings.h"
-#include "ui/NewTabPage.h"
+#include "home/HomePage.h"
 #include "utils/UrlUtils.h"
 #include "web/ErrorPage.h"
 #include "web/WebPage.h"
@@ -21,27 +23,34 @@ QUrl BrowserTab::startPageUrl()
     return QUrl(QStringLiteral("about:yozora"));
 }
 
-BrowserTab::BrowserTab(QWebEngineProfile* profile, Settings* settings, QWidget* parent)
+BrowserTab::BrowserTab(QWebEngineProfile* profile, Settings* settings,
+                       const HomeContext& context, QWidget* parent)
     : QWidget(parent)
     , m_settings(settings)
+    , m_context(context)
 {
     m_stack = new QStackedWidget(this);
     m_stack->setContentsMargins(0, 0, 0, 0);
 
-    m_startPage = new NewTabPage(m_stack);
+    m_home = new HomePage(m_context, m_stack);
+
     m_view = new WebView(profile, m_stack);
     auto* page = qobject_cast<WebPage*>(m_view->page());
     if (page) {
         page->setDarkMode(m_dark);
     }
 
-    m_stack->addWidget(m_startPage);
+    m_stack->addWidget(m_home);
     m_stack->addWidget(m_view);
-    m_stack->setCurrentIndex(kStartPageIndex);
+    m_stack->setCurrentIndex(kHomePageIndex);
 
     auto* layout = new QVBoxLayout(this);
     layout->setContentsMargins(0, 0, 0, 0);
     layout->addWidget(m_stack);
+
+    connect(m_home, &HomePage::openUrl, this, &BrowserTab::loadUrl);
+    connect(m_home, &HomePage::searchRequested, this,
+            [this](const QString& text) { loadInput(text, false); });
 
     if (page) {
         connect(page, &WebPage::titleChanged, this, &BrowserTab::updateTitle);
@@ -55,7 +64,6 @@ BrowserTab::BrowserTab(QWebEngineProfile* profile, Settings* settings, QWidget* 
         connect(page, &WebPage::loadProgressChanged, this, &BrowserTab::loadProgressChanged);
         connect(page, &WebPage::newWindowRequested, this, &BrowserTab::newTabRequested);
         connect(page, &WebPage::fullScreenRequested, this, [this](bool fullScreen) {
-            // QWidget has no setFullScreen(); the state bit is the supported way.
             Qt::WindowStates state = m_view->windowState();
             state = fullScreen ? (state | Qt::WindowFullScreen)
                                : (state & ~Qt::WindowFullScreen);
@@ -63,11 +71,16 @@ BrowserTab::BrowserTab(QWebEngineProfile* profile, Settings* settings, QWidget* 
         });
         connect(m_view, &WebView::newTabRequested, this, &BrowserTab::newTabRequested);
         connect(m_view, &WebView::statusMessage, this, &BrowserTab::statusMessage);
-        connect(m_view, &QWebEngineView::loadFinished, this, [this](bool) { updateState(); });
+        connect(m_view, &QWebEngineView::loadFinished, this, [this](bool ok) {
+            updateState();
+            if (ok && m_context.history) {
+                const QUrl current = m_view->url();
+                if (current.isValid() && !current.isEmpty()) {
+                    m_context.history->record(current.toString(), m_view->title());
+                }
+            }
+        });
     }
-
-    connect(m_startPage, &NewTabPage::searchRequested, this,
-            [this](const QString& query) { loadInput(query, false); });
 
     if (m_settings) {
         m_view->setScrollMode(m_settings->scrollMode());
@@ -75,7 +88,6 @@ BrowserTab::BrowserTab(QWebEngineProfile* profile, Settings* settings, QWidget* 
                 [this] { m_view->setScrollMode(m_settings->scrollMode()); });
     }
 
-    updateSearchEngineUi();
     m_lastUrl = startPageUrl();
     m_lastTitle = tr("New Tab");
 }
@@ -86,8 +98,6 @@ QUrl BrowserTab::url() const
         return startPageUrl();
     }
     if (auto* page = qobject_cast<WebPage*>(m_view->page())) {
-        // An error page replaces the document, but the user should still see
-        // the address that failed in the address bar.
         if (page->showingErrorPage() || page->url().scheme() == QLatin1String("yozora-error")) {
             return page->errorPageFor();
         }
@@ -122,7 +132,7 @@ QIcon BrowserTab::icon() const
 
 bool BrowserTab::isStartPage() const
 {
-    return m_stack->currentIndex() == kStartPageIndex;
+    return m_stack->currentIndex() == kHomePageIndex;
 }
 
 bool BrowserTab::canGoBack() const
@@ -152,16 +162,14 @@ int BrowserTab::loadProgress() const
 
 void BrowserTab::showStartPage()
 {
-    m_stack->setCurrentIndex(kStartPageIndex);
-    m_startPage->reset();
+    m_stack->setCurrentIndex(kHomePageIndex);
     m_lastUrl = startPageUrl();
     m_lastTitle = tr("New Tab");
     emit titleChanged();
     emit urlChanged();
     emit canGoBackChanged(false);
     emit canGoForwardChanged(false);
-    updateSearchEngineUi();
-    m_startPage->focusSearch();
+    m_home->focusSearch();
 }
 
 void BrowserTab::showWebPage()
@@ -173,8 +181,7 @@ void BrowserTab::showWebPage()
 
 void BrowserTab::loadUrl(const QUrl& target)
 {
-    if (target.scheme() == QLatin1String("about")
-        && target.host() == QLatin1String("yozora")) {
+    if (target.scheme() == QLatin1String("about") && target.host() == QLatin1String("yozora")) {
         showStartPage();
         return;
     }
@@ -191,9 +198,8 @@ void BrowserTab::loadUrl(const QUrl& target)
 void BrowserTab::loadInput(const QString& text, bool isSearch)
 {
     if (isSearch) {
-        const auto engine =
-            m_settings ? m_settings->searchEngine()
-                       : SearchEngines::byId(SearchEngines::defaultId());
+        const auto engine = m_settings ? m_settings->searchEngine()
+                                       : SearchEngines::byId(SearchEngines::defaultId());
         const QString query = url::toSearchQuery(text);
         const QString target = engine.urlForQuery(query);
         if (target.isEmpty()) {
@@ -205,7 +211,6 @@ void BrowserTab::loadInput(const QString& text, bool isSearch)
 
     const QString normalized = url::normalize(text);
     if (normalized.isEmpty()) {
-        // Not a URL after all: treat it as a search so nothing is a dead end.
         loadInput(text, true);
         return;
     }
@@ -231,7 +236,6 @@ void BrowserTab::goForward()
 void BrowserTab::reload()
 {
     if (isStartPage()) {
-        m_startPage->reset();
         return;
     }
     m_view->page()->triggerAction(QWebEnginePage::Reload);
@@ -248,20 +252,11 @@ void BrowserTab::stop()
 void BrowserTab::setDarkMode(bool dark)
 {
     m_dark = dark;
-    m_startPage->setDarkMode(dark);
     m_view->setDarkMode(dark);
     if (auto* page = qobject_cast<WebPage*>(m_view->page())) {
         page->setDarkMode(dark);
     }
-}
-
-void BrowserTab::updateSearchEngineUi()
-{
-    const auto engine =
-        m_settings ? m_settings->searchEngine()
-                   : SearchEngines::byId(SearchEngines::defaultId());
-    m_startPage->setSearchEngineName(engine.name);
-    m_startPage->setSearchEnginePlaceholder(tr("Search the web with %1").arg(engine.name));
+    m_home->update();
 }
 
 void BrowserTab::updateTitle()

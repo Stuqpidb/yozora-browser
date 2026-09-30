@@ -37,6 +37,7 @@ signals:
 
 protected:
     void focusInEvent(QFocusEvent* event) override;
+    void paintEvent(QPaintEvent* event) override;
 
 private:
     void submit();

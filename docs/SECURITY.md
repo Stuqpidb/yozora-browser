@@ -28,7 +28,7 @@ load arbitrary code into the renderer beyond the pages themselves.
 
 Yozora's own surfaces are **native Qt widgets**, not web pages:
 
-- the start page (`NewTabPage`),
+- the home page (`HomePage`),
 - the settings dialog,
 - the permission prompt,
 - the error page (generated as local HTML with the `yozora-error://` base).

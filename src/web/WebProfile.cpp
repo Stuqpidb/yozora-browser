@@ -256,6 +256,11 @@ qint64 WebProfile::cacheSize() const
     return m_profile ? m_profile->httpCacheMaximumSize() : 0;
 }
 
+quint64 WebProfile::blockedTrackerCount() const
+{
+    return m_interceptor ? m_interceptor->blockedRequestCount() : 0;
+}
+
 void WebProfile::requestSiteStoragePurge()
 {
     AppPaths::ensureCreated();

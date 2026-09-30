@@ -70,6 +70,9 @@ public:
     // Memory footprint of the Chromium cache, in bytes.
     [[nodiscard]] qint64 cacheSize() const;
 
+    // How many tracker requests the interceptor has blocked this session.
+    [[nodiscard]] quint64 blockedTrackerCount() const;
+
     // Requests that on-disk site storage be wiped on the next start. Clearing
     // localStorage / IndexedDB / service workers while Chromium runs is not
     // supported, so the request is deferred rather than faked.

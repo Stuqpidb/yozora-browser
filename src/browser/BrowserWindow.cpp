@@ -2,16 +2,20 @@
 #include "browser/BrowserWindow.h"
 
 #include "browser/BrowserTab.h"
+#include "core/BookmarkStore.h"
+#include "core/HistoryStore.h"
 #include "core/SearchEngine.h"
 #include "core/Settings.h"
 #include "core/Theme.h"
 #include "core/UpdateChecker.h"
+#include "home/HomePage.h"
 #include "privacy/PermissionManager.h"
 #include "ui/AddressBar.h"
 #include "ui/ClearBrowsingDataDialog.h"
 #include "ui/NavigationBar.h"
 #include "ui/SettingsDialog.h"
-#include "ui/TabWidget.h"
+#include "ui/SideBar.h"
+#include "ui/TabStrip.h"
 #include "utils/UrlUtils.h"
 #include "utils/Version.h"
 #include "web/DownloadManager.h"
@@ -23,16 +27,16 @@
 #include <QApplication>
 #include <QCloseEvent>
 #include <QDesktopServices>
-#include <QFile>
+#include <QDialog>
 #include <QFileInfo>
-#include <QIODevice>
+#include <QHBoxLayout>
+#include <QListWidget>
 #include <QMenu>
 #include <QMessageBox>
 #include <QPointer>
 #include <QShortcut>
-#include <QSplitter>
+#include <QStackedWidget>
 #include <QStatusBar>
-#include <QTabBar>
 #include <QVBoxLayout>
 #include <QWebEngineView>
 
@@ -42,19 +46,19 @@ namespace {
 constexpr int kMaxClosedTabs = 12;
 }
 
-BrowserWindow::BrowserWindow(WebProfile* profile, Settings* settings, bool privateMode,
-                             QWidget* parent)
+BrowserWindow::BrowserWindow(WebProfile* profile, Settings* settings, BookmarkStore* bookmarks,
+                             HistoryStore* history, bool privateMode, QWidget* parent)
     : QMainWindow(parent)
     , m_profile(profile)
     , m_settings(settings)
+    , m_bookmarks(bookmarks)
+    , m_history(history)
     , m_updateChecker(new UpdateChecker(this))
     , m_private(privateMode)
 {
     buildUi();
     buildShortcuts();
 
-    // One permission manager per window. It shares the profile's permission
-    // store, so a grant in one window is visible to the others.
     m_permissions = new PermissionManager(m_profile->profile(), m_settings, this);
     connect(m_permissions, &PermissionManager::permissionDenied, this,
             [this](const QString& origin, const QString& feature) {
@@ -76,13 +80,11 @@ BrowserWindow::BrowserWindow(WebProfile* profile, Settings* settings, bool priva
     applyTheme(isDark());
     newTab();
 
-    // A private window starts fresh every time, so it does not reuse the
-    // dimensions of a previous session; a normal window does.
     const QByteArray geometry = m_settings->windowGeometry();
     if (!m_private && !geometry.isEmpty()) {
         restoreGeometry(geometry);
     } else {
-        resize(1280, 820);
+        resize(1320, 860);
     }
 }
 
@@ -97,55 +99,79 @@ void BrowserWindow::buildUi()
     setObjectName(QStringLiteral("browserWindow"));
 
     auto* central = new QWidget(this);
-    auto* layout = new QVBoxLayout(central);
-    layout->setContentsMargins(0, 0, 0, 0);
-    layout->setSpacing(0);
+    auto* root = new QHBoxLayout(central);
+    root->setContentsMargins(0, 0, 0, 0);
+    root->setSpacing(0);
 
-    m_navBar = new NavigationBar(central);
+    m_sideBar = new SideBar(central);
+    root->addWidget(m_sideBar);
+
+    auto* right = new QWidget(central);
+    auto* column = new QVBoxLayout(right);
+    column->setContentsMargins(0, 0, 0, 0);
+    column->setSpacing(0);
+
+    m_tabStrip = new TabStrip(right);
+    m_navBar = new NavigationBar(right);
     m_navBar->setObjectName(QStringLiteral("navigationBar"));
-    m_navBar->setBrand(QStringLiteral("Yozora"), QString::fromLatin1(kVersionString));
 
-    m_tabWidget = new TabWidget(central);
-    m_tabWidget->setObjectName(QStringLiteral("tabWidget"));
+    m_pages = new QStackedWidget(right);
+    m_downloads = new DownloadManager(m_profile->profile(), m_settings, right);
 
-    m_downloads = new DownloadManager(m_profile->profile(), m_settings, central);
-
-    layout->addWidget(m_navBar);
-    layout->addWidget(m_tabWidget, 1);
-    layout->addWidget(m_downloads->statusBar());
+    column->addWidget(m_tabStrip);
+    column->addWidget(m_navBar);
+    column->addWidget(m_pages, 1);
+    column->addWidget(m_downloads->statusBar());
+    root->addWidget(right, 1);
 
     setCentralWidget(central);
     statusBar()->hide();
+
+    connect(m_sideBar, &SideBar::homeRequested, this, [this] {
+        if (auto* tab = currentTab()) {
+            tab->showStartPage();
+        }
+        updateForActiveTab();
+    });
+    connect(m_sideBar, &SideBar::historyRequested, this, [this] { showLibrary(false); });
+    connect(m_sideBar, &SideBar::bookmarksRequested, this, [this] { showLibrary(true); });
+    connect(m_sideBar, &SideBar::downloadsRequested, this, [this] {
+        QDesktopServices::openUrl(QUrl::fromLocalFile(m_settings->downloadDirectory()));
+    });
+    connect(m_sideBar, &SideBar::privateRequested, this, &BrowserWindow::openPrivateWindow);
+    connect(m_sideBar, &SideBar::settingsRequested, this, &BrowserWindow::showSettings);
+    connect(m_sideBar, &SideBar::themeToggleRequested, this, [this] {
+        m_settings->setThemeMode(isDark() ? Settings::ThemeMode::Light
+                                          : Settings::ThemeMode::Dark);
+    });
+
+    connect(m_tabStrip, &TabStrip::currentChanged, this, &BrowserWindow::selectTab);
+    connect(m_tabStrip, &TabStrip::closeRequested, this, &BrowserWindow::closeTab);
+    connect(m_tabStrip, &TabStrip::newTabRequested, this, [this] { newTab(); });
+    connect(m_tabStrip, &TabStrip::moveRequested, this, [this](int from, int to) {
+        BrowserTab* current = currentTab();
+        m_tabs.move(from, to);
+        refreshTabStrip();
+        if (current) {
+            selectTab(m_tabs.indexOf(current));
+        }
+    });
 
     connect(m_navBar, &NavigationBar::backRequested, this, &BrowserWindow::goBack);
     connect(m_navBar, &NavigationBar::forwardRequested, this, &BrowserWindow::goForward);
     connect(m_navBar, &NavigationBar::reloadRequested, this, &BrowserWindow::reload);
     connect(m_navBar, &NavigationBar::stopRequested, this, &BrowserWindow::stop);
     connect(m_navBar, &NavigationBar::menuRequested, this, &BrowserWindow::buildMenu);
-
+    connect(m_navBar, &NavigationBar::bookmarkRequested, this, &BrowserWindow::toggleBookmark);
     connect(m_navBar->addressBar(), &AddressBar::navigationRequested, this,
             &BrowserWindow::navigateInput);
 
-    connect(m_tabWidget, &TabWidget::newTabRequested, this, [this] { newTab(); });
-    connect(m_tabWidget, &TabWidget::closeRequested, this, &BrowserWindow::closeTab);
-    connect(m_tabWidget, &QTabWidget::currentChanged, this, [this](int) { updateForActiveTab(); });
-
     connect(m_downloads, &DownloadManager::downloadStarted, this,
-            [this](const QString& name) {
-                // A navigation that turned into a download leaves the view
-                // blank; show the start page again instead of an empty frame.
-                if (auto* tab = currentTab()) {
-                    if (!tab->isStartPage() && tab->view()
-                        && tab->view()->url().scheme() == QLatin1String("about")) {
-                        tab->showStartPage();
-                    }
-                }
-                showStatusMessage(tr("Downloading %1").arg(name));
+            [this](const QString& name) { showStatusMessage(tr("Downloading %1").arg(name)); });
+    connect(m_downloads, &DownloadManager::downloadFinished, this,
+            [this](const QString& path) {
+                showStatusMessage(tr("Downloaded %1").arg(QFileInfo(path).fileName()));
             });
-    connect(m_downloads, &DownloadManager::downloadFinished, this, [this](const QString& path) {
-        showStatusMessage(tr("Downloaded %1")
-                              .arg(QFileInfo(path).fileName()));
-    });
     connect(m_downloads, &DownloadManager::downloadFailed, this,
             [this](const QString& name, const QString&) {
                 showStatusMessage(tr("Download of %1 failed").arg(name));
@@ -159,34 +185,25 @@ void BrowserWindow::buildShortcuts()
         shortcut->setContext(Qt::WindowShortcut);
         connect(shortcut, &QShortcut::activated, this, handler);
     };
+    const auto sequence = [](const char* text) { return QKeySequence(QString::fromLatin1(text)); };
 
-    // Key sequences are written as text so the map reads the same on every
-    // platform and can be copied straight into the documentation.
-    const auto sequence = [](const char* text) {
-        return QKeySequence(QString::fromLatin1(text));
-    };
-
-    // --- tabs and windows ---
     add(sequence("Ctrl+T"), [this] { newTab(); });
     add(sequence("Ctrl+W"), [this] { closeCurrentTab(); });
     add(sequence("Ctrl+Shift+T"), [this] { restoreLastClosedTab(); });
     add(sequence("Ctrl+N"), [this] { openNewWindow(); });
     add(sequence("Ctrl+Shift+N"), [this] { openPrivateWindow(); });
 
-    // Ctrl+1..9 jump to a tab, Ctrl+9 also reaches the last one.
     for (int i = 1; i <= 9; ++i) {
-        add(sequence(QStringLiteral("Ctrl+%1").arg(i).toLatin1().constData()),
-            [this, i] {
-                const int index = i - 1;
-                if (index < m_tabWidget->count()) {
-                    m_tabWidget->setCurrentIndex(index);
-                } else if (i == 9) {
-                    m_tabWidget->setCurrentIndex(m_tabWidget->count() - 1);
-                }
-            });
+        add(sequence(QStringLiteral("Ctrl+%1").arg(i).toLatin1().constData()), [this, i] {
+            const int index = i - 1;
+            if (index < m_tabs.size()) {
+                selectTab(index);
+            } else if (i == 9 && !m_tabs.isEmpty()) {
+                selectTab(m_tabs.size() - 1);
+            }
+        });
     }
 
-    // --- navigation ---
     add(sequence("Alt+Left"), [this] { goBack(); });
     add(sequence("Alt+Right"), [this] { goForward(); });
     add(sequence("Ctrl+R"), [this] { reload(); });
@@ -194,24 +211,31 @@ void BrowserWindow::buildShortcuts()
     add(sequence("Esc"), [this] {
         if (m_navBar->addressBar()->hasFocus()) {
             m_navBar->addressBar()->clear();
-            if (QWidget* page = m_tabWidget->currentWidget()) {
-                page->setFocus();
+            if (auto* tab = currentTab()) {
+                tab->view()->setFocus();
             }
         } else {
             stop();
         }
     });
 
-    // --- address bar ---
     add(sequence("Ctrl+L"), [this] { focusAddressBar(); });
+    add(sequence("Ctrl+D"), [this] { toggleBookmark(); });
+    add(sequence("Ctrl+Shift+H"), [this] {
+        if (auto* tab = currentTab()) {
+            tab->showStartPage();
+            tab->homePage()->focusSearch();
+        }
+        updateForActiveTab();
+    });
+    add(sequence("Ctrl+H"), [this] { showLibrary(false); });
+    add(sequence("Ctrl+Shift+O"), [this] { showLibrary(true); });
 
-    // --- window ---
     add(sequence("Ctrl+Shift+I"), [this] { openDevTools(); });
     add(sequence("F12"), [this] { openDevTools(); });
     add(sequence("Ctrl+,"), [this] { showSettings(); });
     add(sequence("Ctrl+Q"), [this] { close(); });
 
-    // --- zoom ---
     const auto zoomBy = [this](double factor) {
         if (auto* tab = currentTab()) {
             if (tab->view()) {
@@ -236,10 +260,22 @@ void BrowserWindow::buildShortcuts()
 
 BrowserTab* BrowserWindow::newTab(const QUrl& url, bool foreground)
 {
-    auto* tab = new BrowserTab(m_profile->profile(), m_settings, this);
-    const int index = m_tabWidget->appendTab(tab, TabWidget::defaultTitle());
+    HomeContext context;
+    context.bookmarks = m_bookmarks;
+    context.history = m_history;
+    context.openTabCount = [this] { return static_cast<int>(m_tabs.size()); };
+    context.blockedTrackerCount = [this] {
+        return m_profile ? m_profile->blockedTrackerCount() : 0;
+    };
+    context.openHistory = [this] { showLibrary(false); };
+    context.openBookmarks = [this] { showLibrary(true); };
+    context.openSettings = [this] { showSettings(); };
+
+    auto* tab = new BrowserTab(m_profile->profile(), m_settings, context, this);
     tab->setDarkMode(isDark());
     connectTab(tab);
+    m_pages->addWidget(tab);
+    m_tabs.append(tab);
 
     if (url.isValid() && !url.isEmpty()) {
         tab->loadUrl(url);
@@ -247,26 +283,45 @@ BrowserTab* BrowserWindow::newTab(const QUrl& url, bool foreground)
         tab->showStartPage();
     }
 
+    const int index = m_tabs.size() - 1;
+    refreshTabStrip();
     if (foreground) {
-        m_tabWidget->setCurrentIndex(index);
+        selectTab(index);
         m_navBar->addressBar()->setFocus();
-    }
-
-    updateTabLabel(index);
-    if (m_tabWidget->currentIndex() == index) {
-        updateForActiveTab();
+    } else if (m_tabs.size() == 1) {
+        selectTab(0);
     }
     return tab;
 }
 
 int BrowserWindow::tabCount() const
 {
-    return m_tabWidget->count();
+    return static_cast<int>(m_tabs.size());
+}
+
+BrowserTab* BrowserWindow::currentTab() const
+{
+    const int index = m_tabStrip->currentIndex();
+    if (index < 0 || index >= m_tabs.size()) {
+        return nullptr;
+    }
+    return m_tabs.at(index);
+}
+
+void BrowserWindow::selectTab(int index)
+{
+    if (index < 0 || index >= m_tabs.size()) {
+        return;
+    }
+    m_tabStrip->setCurrentIndex(index);
+    m_pages->setCurrentWidget(m_tabs.at(index));
+    m_lastActiveIndex = index;
+    updateForActiveTab();
 }
 
 void BrowserWindow::openInFirstTab(const QUrl& url)
 {
-    if (m_tabWidget->count() != 1) {
+    if (m_tabs.size() != 1) {
         newTab(url);
         return;
     }
@@ -275,26 +330,10 @@ void BrowserWindow::openInFirstTab(const QUrl& url)
     }
 }
 
-BrowserTab* BrowserWindow::currentTab() const
-{
-    return qobject_cast<BrowserTab*>(m_tabWidget->currentWidget());
-}
-
 void BrowserWindow::connectTab(BrowserTab* tab)
 {
     connect(tab, &BrowserTab::urlChanged, this, &BrowserWindow::updateForActiveTab);
-    connect(tab, &BrowserTab::titleChanged, this, [this, tab] {
-        const int index = m_tabWidget->indexOf(tab);
-        if (index >= 0) {
-            updateTabLabel(index);
-            if (index == m_tabWidget->currentIndex()) {
-                updateForActiveTab();
-            }
-        }
-    });
-
-    // The navigation bar follows the active tab, not the tab that happens to
-    // be reporting, so every state change is filtered by the current index.
+    connect(tab, &BrowserTab::titleChanged, this, [this] { refreshTabStrip(); updateForActiveTab(); });
     connect(tab, &BrowserTab::loadingChanged, this, [this, tab](bool) {
         if (tab == currentTab()) {
             updateForActiveTab();
@@ -315,13 +354,10 @@ void BrowserWindow::connectTab(BrowserTab* tab)
             m_navBar->setCanGoForward(tab->canGoForward());
         }
     });
-
     connect(tab, &BrowserTab::newTabRequested, this,
             [this](const QUrl& url, bool foreground) { newTab(url, foreground); });
     connect(tab, &BrowserTab::statusMessage, this, &BrowserWindow::showStatusMessage);
 
-    // Permission requests and external protocols belong to the window, not the
-    // page, so every new tab is wired up here as it is created.
     if (auto* view = tab->view()) {
         if (auto* page = qobject_cast<WebPage*>(view->page())) {
             if (m_permissions) {
@@ -333,9 +369,25 @@ void BrowserWindow::connectTab(BrowserTab* tab)
     }
 }
 
+void BrowserWindow::refreshTabStrip()
+{
+    QList<TabStrip::Tab> stripTabs;
+    stripTabs.reserve(m_tabs.size());
+    for (BrowserTab* tab : m_tabs) {
+        TabStrip::Tab entry;
+        entry.title = tab->title();
+        entry.icon = tab->icon();
+        entry.tooltip = tab->url().toString();
+        stripTabs.append(entry);
+    }
+    m_tabStrip->setTabs(stripTabs);
+    const int current = m_tabs.isEmpty() ? -1 : qBound(0, m_lastActiveIndex, static_cast<int>(m_tabs.size()) - 1);
+    m_tabStrip->setCurrentIndex(current);
+}
+
 void BrowserWindow::closeTab(int index)
 {
-    if (index < 0 || index >= m_tabWidget->count()) {
+    if (index < 0 || index >= m_tabs.size()) {
         return;
     }
 
@@ -344,31 +396,27 @@ void BrowserWindow::closeTab(int index)
         m_closedTabs.removeLast();
     }
 
-    const int next = m_tabWidget->preferredNextTabIndex(index);
-    QWidget* removed = m_tabWidget->widget(index);
-    m_tabWidget->removeTab(index);
-    // Deleting the tab tears down its WebEngine page and renderer resources.
-    if (removed) {
-        removed->deleteLater();
-    }
+    BrowserTab* tab = m_tabs.takeAt(index);
+    m_pages->removeWidget(tab);
+    tab->deleteLater();
 
-    if (m_tabWidget->count() == 0) {
+    if (m_tabs.isEmpty()) {
         if (m_closing) {
+            refreshTabStrip();
             return;
         }
         close();
         return;
     }
 
-    if (next >= 0) {
-        m_tabWidget->setCurrentIndex(next);
-    }
-    updateForActiveTab();
+    const int next = qBound(0, index, static_cast<int>(m_tabs.size()) - 1);
+    refreshTabStrip();
+    selectTab(next);
 }
 
 void BrowserWindow::closeCurrentTab()
 {
-    closeTab(m_tabWidget->currentIndex());
+    closeTab(m_tabStrip->currentIndex());
 }
 
 void BrowserWindow::restoreLastClosedTab()
@@ -382,12 +430,10 @@ void BrowserWindow::restoreLastClosedTab()
 BrowserWindow::SessionSnapshot BrowserWindow::snapshot() const
 {
     SessionSnapshot snap;
-    for (int i = 0; i < m_tabWidget->count(); ++i) {
-        if (auto* tab = qobject_cast<BrowserTab*>(m_tabWidget->widget(i))) {
-            snap.urls += tab->openUrls();
-        }
+    for (BrowserTab* tab : m_tabs) {
+        snap.urls += tab->openUrls();
     }
-    snap.activeIndex = m_tabWidget->currentIndex();
+    snap.activeIndex = m_tabStrip->currentIndex();
     return snap;
 }
 
@@ -397,25 +443,21 @@ void BrowserWindow::restoreSnapshot(const SessionSnapshot& snap)
         newTab();
         return;
     }
-
-    while (m_tabWidget->count() > 0) {
-        QWidget* old = m_tabWidget->widget(0);
-        m_tabWidget->removeTab(0);
-        if (old) {
-            old->deleteLater();
-        }
+    for (BrowserTab* tab : m_tabs) {
+        m_pages->removeWidget(tab);
+        tab->deleteLater();
     }
+    m_tabs.clear();
 
-    int active = 0;
+    BrowserTab* active = nullptr;
     for (int i = 0; i < snap.urls.size(); ++i) {
-        const QUrl url(snap.urls.at(i));
-        BrowserTab* tab = newTab(url, false);
+        BrowserTab* tab = newTab(QUrl(snap.urls.at(i)), false);
         if (i == snap.activeIndex) {
-            active = m_tabWidget->indexOf(tab);
+            active = tab;
         }
     }
-    m_tabWidget->setCurrentIndex(qBound(0, active, m_tabWidget->count() - 1));
-    updateForActiveTab();
+    refreshTabStrip();
+    selectTab(active ? m_tabs.indexOf(active) : 0);
 }
 
 // ---------------------------------------------------------------------------
@@ -487,30 +529,25 @@ void BrowserWindow::openDevTools()
 
 void BrowserWindow::openNewWindow()
 {
-    auto* window = new BrowserWindow(m_profile, m_settings);
+    auto* window = new BrowserWindow(m_profile, m_settings, m_bookmarks, m_history);
     window->setAttribute(Qt::WA_DeleteOnClose);
-    window->resize(1100, 740);
+    window->resize(1180, 780);
     window->show();
 }
 
 void BrowserWindow::openPrivateWindow()
 {
-    // A private window gets its own off-the-record profile: nothing it does is
-    // written to disk and none of it is shared with the persistent profile.
-    // The profile is parented to the window, so it is torn down with it.
     auto* profile = WebProfile::createEphemeral(m_settings);
-    auto* window = new BrowserWindow(profile, m_settings, /*privateMode=*/true);
+    auto* window = new BrowserWindow(profile, m_settings, m_bookmarks, m_history, true);
     profile->setParent(window);
     window->setAttribute(Qt::WA_DeleteOnClose);
-    window->resize(1100, 740);
+    window->resize(1180, 780);
     window->show();
 }
 
 void BrowserWindow::handleExternalProtocol(const QUrl& url, int navigationType)
 {
     Q_UNUSED(navigationType)
-    // Nothing outside the browser is launched silently. The user sees exactly
-    // which link and which scheme wants to leave Yozora first.
     const auto answer = QMessageBox::question(
         this, tr("Open with another application?"),
         tr("This link wants to open an external application.\n\n"
@@ -540,6 +577,70 @@ void BrowserWindow::showClearBrowsingData()
     }
 }
 
+void BrowserWindow::toggleBookmark()
+{
+    auto* tab = currentTab();
+    if (!tab || !m_bookmarks) {
+        return;
+    }
+    const QUrl url = tab->url();
+    if (!url.isValid() || url.scheme() == QLatin1String("about")) {
+        return;
+    }
+    m_bookmarks->toggle(url.toString(), tab->title());
+    updateBookmarkStar();
+}
+
+void BrowserWindow::updateBookmarkStar()
+{
+    auto* tab = currentTab();
+    if (!tab || !m_bookmarks) {
+        m_navBar->setBookmarked(false);
+        return;
+    }
+    const QUrl url = tab->url();
+    m_navBar->setBookmarked(url.isValid() && m_bookmarks->contains(url.toString()));
+}
+
+void BrowserWindow::showLibrary(bool bookmarks)
+{
+    QDialog dialog(this);
+    dialog.setWindowTitle(bookmarks ? tr("Bookmarks") : tr("History"));
+    dialog.resize(560, 520);
+
+    auto* layout = new QVBoxLayout(&dialog);
+    auto* list = new QListWidget(&dialog);
+    layout->addWidget(list);
+
+    if (bookmarks) {
+        const QList<Bookmark> items = m_bookmarks ? m_bookmarks->all() : QList<Bookmark>{};
+        for (const Bookmark& bookmark : items) {
+            auto* item = new QListWidgetItem(
+                QStringLiteral("%1\n%2").arg(bookmark.title, bookmark.url), list);
+            item->setData(Qt::UserRole, bookmark.url);
+        }
+    } else {
+        const QList<HistoryEntry> items = m_history ? m_history->recent(300) : QList<HistoryEntry>{};
+        for (const HistoryEntry& entry : items) {
+            auto* item = new QListWidgetItem(
+                QStringLiteral("%1\n%2").arg(entry.title, entry.url), list);
+            item->setData(Qt::UserRole, entry.url);
+        }
+    }
+
+    connect(list, &QListWidget::itemActivated, this, [this, &dialog](QListWidgetItem* item) {
+        const QUrl url(item->data(Qt::UserRole).toString());
+        if (url.isValid()) {
+            if (auto* tab = currentTab()) {
+                tab->loadUrl(url);
+            }
+            dialog.accept();
+        }
+    });
+
+    dialog.exec();
+}
+
 void BrowserWindow::showStatusMessage(const QString& message)
 {
     m_navBar->showMessage(message);
@@ -557,6 +658,17 @@ void BrowserWindow::buildMenu(const QPoint& globalPos)
 
     QAction* privateWindowAction = menu.addAction(tr("New private window\tCtrl+Shift+N"));
     connect(privateWindowAction, &QAction::triggered, this, &BrowserWindow::openPrivateWindow);
+    menu.addSeparator();
+
+    QAction* bookmarkAction = menu.addAction(tr("Bookmark this page\tCtrl+D"));
+    connect(bookmarkAction, &QAction::triggered, this, &BrowserWindow::toggleBookmark);
+
+    QAction* bookmarksAction = menu.addAction(tr("Bookmarks\tCtrl+Shift+O"));
+    connect(bookmarksAction, &QAction::triggered, this, [this] { showLibrary(true); });
+
+    QAction* historyAction = menu.addAction(tr("History\tCtrl+H"));
+    connect(historyAction, &QAction::triggered, this, [this] { showLibrary(false); });
+    menu.addSeparator();
 
     QAction* settingsAction = menu.addAction(tr("Settings...\tCtrl+,"));
     connect(settingsAction, &QAction::triggered, this, &BrowserWindow::showSettings);
@@ -585,9 +697,9 @@ void BrowserWindow::buildMenu(const QPoint& globalPos)
             showStatusMessage(tr("Yozora is up to date"));
         }
     });
-
     menu.addSeparator();
-    auto* closeAction = menu.addAction(tr("Close window\tCtrl+Q"));
+
+    QAction* closeAction = menu.addAction(tr("Close window\tCtrl+Q"));
     connect(closeAction, &QAction::triggered, this, &BrowserWindow::close);
 
     menu.exec(globalPos);
@@ -597,20 +709,9 @@ void BrowserWindow::buildMenu(const QPoint& globalPos)
 // State
 // ---------------------------------------------------------------------------
 
-void BrowserWindow::updateTabLabel(int index)
+void BrowserWindow::updateTabLabel(int)
 {
-    auto* tab = qobject_cast<BrowserTab*>(m_tabWidget->widget(index));
-    if (!tab) {
-        return;
-    }
-    QString label = tab->title();
-    if (label.trimmed().isEmpty()) {
-        label = TabWidget::defaultTitle();
-    }
-    if (label.size() > 48) {
-        label = label.left(47) + QChar(0x2026);
-    }
-    m_tabWidget->updateTab(index, label, tab->icon());
+    refreshTabStrip();
 }
 
 void BrowserWindow::updateForActiveTab()
@@ -619,12 +720,13 @@ void BrowserWindow::updateForActiveTab()
     if (!tab) {
         return;
     }
-
     m_navBar->setCanGoBack(tab->canGoBack());
     m_navBar->setCanGoForward(tab->canGoForward());
     m_navBar->setLoading(tab->isLoading());
     m_navBar->addressBar()->displayUrl(tab->url());
-    updateTabLabel(m_tabWidget->currentIndex());
+    m_sideBar->setHomeActive(tab->isStartPage());
+    updateBookmarkStar();
+    refreshTabStrip();
 }
 
 bool BrowserWindow::isDark() const
@@ -635,10 +737,10 @@ bool BrowserWindow::isDark() const
 void BrowserWindow::applyTheme(bool dark)
 {
     Theme::apply(dark);
-    for (int i = 0; i < m_tabWidget->count(); ++i) {
-        if (auto* tab = qobject_cast<BrowserTab*>(m_tabWidget->widget(i))) {
-            tab->setDarkMode(dark);
-        }
+    m_sideBar->setDarkTheme(dark);
+    m_tabStrip->setDarkTheme(dark);
+    for (BrowserTab* tab : m_tabs) {
+        tab->setDarkMode(dark);
     }
     update();
 }
@@ -646,7 +748,6 @@ void BrowserWindow::applyTheme(bool dark)
 void BrowserWindow::closeEvent(QCloseEvent* event)
 {
     m_closing = true;
-    // A private window leaves no trace, including its last window size.
     if (!m_private) {
         m_settings->setWindowGeometry(saveGeometry());
     }

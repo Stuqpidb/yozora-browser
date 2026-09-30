@@ -21,6 +21,7 @@
 #include <QListWidget>
 #include <QPushButton>
 #include <QRadioButton>
+#include <QStackedWidget>
 #include <QTabWidget>
 #include <QVBoxLayout>
 
@@ -53,26 +54,55 @@ SettingsDialog::SettingsDialog(Settings* settings, WebProfile* profile, QWidget*
     , m_profile(profile)
 {
     setWindowTitle(tr("Yozora Settings"));
-    setMinimumSize(680, 560);
+    setMinimumSize(860, 620);
 
-    auto* root = new QVBoxLayout(this);
+    auto* root = new QHBoxLayout(this);
     root->setContentsMargins(0, 0, 0, 0);
     root->setSpacing(0);
 
-    auto* pages = new QTabWidget(this);
-    pages->setDocumentMode(true);
-    pages->addTab(buildSearchSection(), tr("Search"));
-    pages->addTab(buildStartupSection(), tr("Startup"));
-    pages->addTab(buildDownloadsSection(), tr("Downloads"));
-    pages->addTab(buildPrivacySection(), tr("Privacy"));
-    pages->addTab(buildAppearanceSection(), tr("Appearance"));
-    pages->addTab(buildDataSection(), tr("Data"));
-    pages->addTab(buildAboutSection(), tr("About"));
-    root->addWidget(pages);
+    m_nav = new QListWidget(this);
+    m_nav->setObjectName(QStringLiteral("settingsNav"));
+    m_nav->setFixedWidth(210);
+    m_nav->setFocusPolicy(Qt::NoFocus);
+    root->addWidget(m_nav);
+
+    auto* right = new QWidget(this);
+    auto* rightLayout = new QVBoxLayout(right);
+    rightLayout->setContentsMargins(0, 0, 0, 0);
+    rightLayout->setSpacing(0);
+
+    auto* stack = new QStackedWidget(right);
+    struct Section {
+        QString title;
+        QWidget* page;
+    };
+    const QList<Section> sections = {
+        {tr("Search"), buildSearchSection()},
+        {tr("Startup"), buildStartupSection()},
+        {tr("Downloads"), buildDownloadsSection()},
+        {tr("Privacy"), buildPrivacySection()},
+        {tr("Appearance"), buildAppearanceSection()},
+        {tr("Data"), buildDataSection()},
+        {tr("About"), buildAboutSection()},
+    };
+    for (const Section& section : sections) {
+        m_nav->addItem(section.title);
+        stack->addWidget(section.page);
+    }
+    connect(m_nav, &QListWidget::currentRowChanged, stack, &QStackedWidget::setCurrentIndex);
+    m_nav->setCurrentRow(0);
+
+    rightLayout->addWidget(stack, 1);
 
     m_buttons = new QDialogButtonBox(QDialogButtonBox::Close, this);
     connect(m_buttons, &QDialogButtonBox::rejected, this, &QDialog::accept);
-    root->addWidget(m_buttons);
+    auto* buttonRow = new QHBoxLayout;
+    buttonRow->setContentsMargins(20, 10, 20, 16);
+    buttonRow->addStretch(1);
+    buttonRow->addWidget(m_buttons);
+    rightLayout->addLayout(buttonRow);
+
+    root->addWidget(right, 1);
 
     // Settings apply immediately, the way desktop browsers behave.
     connect(m_searchEngine, &QComboBox::currentIndexChanged, this, [this](int) {

@@ -75,6 +75,7 @@ private:
 
     QLabel* m_storagePath = nullptr;
     QListWidget* m_permissionList = nullptr;
+    QListWidget* m_nav = nullptr;
 
     QLabel* m_versionLabel = nullptr;
     QDialogButtonBox* m_buttons = nullptr;

@@ -28,6 +28,13 @@ public:
     // one). Never uploaded; it only extends the built-in list on this machine.
     [[nodiscard]] static QString trackerListPath();
 
+    // Local, user owned state that is not Chromium data: bookmarks, history and
+    // the saved home-page layout. All plain JSON on this machine.
+    [[nodiscard]] static QString stateDir();
+    [[nodiscard]] static QString bookmarksPath();
+    [[nodiscard]] static QString historyPath();
+    [[nodiscard]] static QString homeLayoutPath();
+
     // Marker file whose presence asks the next start to wipe on-disk site
     // storage (localStorage, IndexedDB, service workers) before the profile is
     // created. Clearing those while Chromium is running is not supported, so

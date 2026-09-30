@@ -7,6 +7,8 @@
 
 #include "app/AppPaths.h"
 #include "browser/BrowserWindow.h"
+#include "core/BookmarkStore.h"
+#include "core/HistoryStore.h"
 #include "core/Settings.h"
 #include "core/Theme.h"
 #include "utils/Version.h"
@@ -133,8 +135,10 @@ int main(int argc, char* argv[])
     Theme::apply(settings.themeMode() != Settings::ThemeMode::Light);
 
     WebProfile profile(&settings);
+    BookmarkStore bookmarks;
+    HistoryStore history;
 
-    BrowserWindow window(&profile, &settings);
+    BrowserWindow window(&profile, &settings, &bookmarks, &history);
 
     // An address on the command line replaces the start page in the first tab
     // instead of opening a second one.

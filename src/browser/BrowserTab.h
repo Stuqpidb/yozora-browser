@@ -1,6 +1,8 @@
 // SPDX-License-Identifier: MIT
 #pragma once
 
+#include "home/HomeWidget.h"
+
 #include <QIcon>
 #include <QString>
 #include <QStringList>
@@ -12,34 +14,30 @@ class QWebEngineProfile;
 
 namespace yozora {
 
-class NewTabPage;
+class HomePage;
 class Settings;
 class WebPage;
 class WebView;
 
-// One browser tab: either the Yozora start page or a web page.
-//
-// The start page is a native widget, not a rendered document, so it appears
-// instantly and needs no bridge between C++ and the renderer. Both surfaces
-// live in a QStackedWidget, which is the only thing the shell has to care
-// about.
+// One browser tab: either the Yozora home page (widget dashboard) or a web
+// page. The home page is a native widget, so it appears instantly and needs no
+// bridge between C++ and the renderer.
 class BrowserTab : public QWidget {
     Q_OBJECT
 
 public:
-    static constexpr int kStartPageIndex = 0;
+    static constexpr int kHomePageIndex = 0;
     static constexpr int kPageIndex = 1;
 
-    // The pseudo-scheme that means "show the Yozora start page".
+    // The pseudo-scheme that means "show the Yozora home page".
     static QUrl startPageUrl();
 
-    BrowserTab(QWebEngineProfile* profile, Settings* settings, QWidget* parent = nullptr);
+    BrowserTab(QWebEngineProfile* profile, Settings* settings, const HomeContext& context,
+               QWidget* parent = nullptr);
     ~BrowserTab() override;
 
     // --- navigation -----------------------------------------------------
     void loadUrl(const QUrl& url);
-    // Turns raw address-bar input into a URL, running it through the search
-    // engine when `isSearch` is true.
     void loadInput(const QString& text, bool isSearch);
     void showStartPage();
     void goBack();
@@ -58,10 +56,10 @@ public:
     [[nodiscard]] bool isStartPage() const;
 
     [[nodiscard]] WebView* view() const { return m_view; }
-    [[nodiscard]] NewTabPage* startPage() const { return m_startPage; }
+    [[nodiscard]] HomePage* homePage() const { return m_home; }
 
     void setDarkMode(bool dark);
-    void updateSearchEngineUi();
+    void updateSearchEngineUi() {}
 
     // URLs currently open in this tab, used for session restore.
     [[nodiscard]] QStringList openUrls() const;
@@ -82,9 +80,10 @@ private:
     void showWebPage();
 
     QStackedWidget* m_stack = nullptr;
-    NewTabPage* m_startPage = nullptr;
+    HomePage* m_home = nullptr;
     WebView* m_view = nullptr;
     Settings* m_settings = nullptr;
+    HomeContext m_context;
     QString m_lastTitle;
     QUrl m_lastUrl;
     bool m_dark = true;

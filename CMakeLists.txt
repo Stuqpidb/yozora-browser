@@ -72,6 +72,10 @@ add_library(yozora_core STATIC
     src/browser/BrowserTab.h
     src/browser/BrowserWindow.cpp
     src/browser/BrowserWindow.h
+    src/core/BookmarkStore.cpp
+    src/core/BookmarkStore.h
+    src/core/HistoryStore.cpp
+    src/core/HistoryStore.h
     src/core/SearchEngine.cpp
     src/core/SearchEngine.h
     src/core/Settings.cpp
@@ -80,6 +84,12 @@ add_library(yozora_core STATIC
     src/core/Theme.h
     src/core/UpdateChecker.cpp
     src/core/UpdateChecker.h
+    src/home/HomePage.cpp
+    src/home/HomePage.h
+    src/home/HomeWidget.cpp
+    src/home/HomeWidget.h
+    src/home/HomeWidgets.cpp
+    src/home/HomeWidgets.h
     src/privacy/DownloadSafety.cpp
     src/privacy/DownloadSafety.h
     src/privacy/PermissionManager.cpp
@@ -92,14 +102,16 @@ add_library(yozora_core STATIC
     src/ui/AddressBar.h
     src/ui/ClearBrowsingDataDialog.cpp
     src/ui/ClearBrowsingDataDialog.h
-    src/ui/NewTabPage.cpp
-    src/ui/NewTabPage.h
     src/ui/NavigationBar.cpp
     src/ui/NavigationBar.h
     src/ui/PermissionPrompt.cpp
     src/ui/PermissionPrompt.h
     src/ui/SettingsDialog.cpp
     src/ui/SettingsDialog.h
+    src/ui/SideBar.cpp
+    src/ui/SideBar.h
+    src/ui/TabStrip.cpp
+    src/ui/TabStrip.h
     src/ui/TabWidget.cpp
     src/ui/TabWidget.h
     src/utils/UrlUtils.cpp
