@@ -1,10 +1,17 @@
 // SPDX-License-Identifier: MIT
 #include "home/HomeWidget.h"
 
+#include "core/Glass.h"
+#include "core/Theme.h"
+
+#include <QColor>
 #include <QHBoxLayout>
 #include <QLabel>
+#include <QLinearGradient>
 #include <QMenu>
 #include <QMouseEvent>
+#include <QPainter>
+#include <QPalette>
 #include <QToolButton>
 #include <QVBoxLayout>
 
@@ -22,7 +29,9 @@ HomeWidget::HomeWidget(const HomeContext& context, QWidget* parent)
     , m_context(context)
 {
     setObjectName(QStringLiteral("homeCard"));
-    setAttribute(Qt::WA_StyledBackground, true);
+    // The body is painted in paintEvent(); the style sheet only styles the
+    // header, the labels and the controls inside the card.
+    setAttribute(Qt::WA_StyledBackground, false);
     setMouseTracking(true);
 
     auto* root = new QVBoxLayout(this);
@@ -133,6 +142,40 @@ void HomeWidget::showCardMenu(const QPoint& globalPos)
     QAction* remove = menu.addAction(tr("Remove widget"));
     connect(remove, &QAction::triggered, this, &HomeWidget::removeRequested);
     menu.exec(globalPos);
+}
+
+void HomeWidget::paintEvent(QPaintEvent* event)
+{
+    Q_UNUSED(event)
+
+    // The search hero floats directly on the night sky, so it must paint
+    // absolutely nothing: not even a transparent clear, because clearing the
+    // backing store with CompositionMode_Source leaves an opaque black patch
+    // under a widget whose parent is only a plain QWidget.
+    if (m_fixed) {
+        return;
+    }
+
+    QPainter painter(this);
+    painter.setRenderHint(QPainter::Antialiasing, true);
+
+    // The rounded corners need clean pixels, so clear to transparent first.
+    painter.setCompositionMode(QPainter::CompositionMode_Source);
+    painter.fillRect(rect(), Qt::transparent);
+    painter.setCompositionMode(QPainter::CompositionMode_SourceOver);
+
+    const bool dark = Theme::isDark();
+    const auto colors = dark ? Theme::darkColors() : Theme::lightColors();
+    Glass::Recipe glass = Glass::recipe(dark, 20);
+
+    if (m_dragging || property("dropTarget").toBool()) {
+        glass.stroke = QColor(colors.accent);
+        glass.highlight = QColor(colors.accent);
+    }
+
+    const QRectF body = QRectF(rect()).adjusted(0.5, 0.5, -0.5, -0.5);
+    Glass::paintShadow(painter, body, glass, 1.0);
+    Glass::paintPanel(painter, body, glass, 1.0);
 }
 
 void HomeWidget::mousePressEvent(QMouseEvent* event)

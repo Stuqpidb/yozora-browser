@@ -9,55 +9,70 @@
 
 namespace yozora {
 
+namespace {
+// Set once by apply(); read by every custom-painted widget.
+bool g_dark = true;
+}  // namespace
+
+bool Theme::isDark()
+{
+    return g_dark;
+}
+
+void Theme::setDark(bool dark)
+{
+    g_dark = dark;
+}
+
 Theme::Colors Theme::darkColors()
 {
     return {
-        /*background*/ QStringLiteral("#080b16"),
-        /*surface*/ QStringLiteral("#10162a"),
-        /*surfaceHover*/ QStringLiteral("#19203a"),
-        /*surfaceActive*/ QStringLiteral("#232d4d"),
-        /*tabActive*/ QStringLiteral("#1b2540"),
-        /*tabInactive*/ QStringLiteral("#0c1220"),
-        /*border*/ QStringLiteral("#242e4c"),
-        /*text*/ QStringLiteral("#e9edfb"),
-        /*textMuted*/ QStringLiteral("#96a0bf"),
-        /*accent*/ QStringLiteral("#7b5cff"),
-        /*accent2*/ QStringLiteral("#3f8cff"),
-        /*accentText*/ QStringLiteral("#ffffff"),
-        /*danger*/ QStringLiteral("#ff5d73"),
-        /*field*/ QStringLiteral("#0d1324"),
-        /*fieldText*/ QStringLiteral("#e9edfb"),
-        /*shadow*/ QStringLiteral("rgba(0, 0, 0, 0.55)"),
-        /*rail*/ QStringLiteral("#0a0f1f"),
-        /*card*/ QStringLiteral("rgba(17, 23, 42, 0.72)"),
-        /*cardBorder*/ QStringLiteral("rgba(255, 255, 255, 0.08)"),
-        /*chip*/ QStringLiteral("rgba(255, 255, 255, 0.06)"),
+        /*background*/ QStringLiteral("#070a12"),
+        /*surface*/ QStringLiteral("#0d111b"),
+        /*surfaceHover*/ QStringLiteral("#161d2b"),
+        /*surfaceActive*/ QStringLiteral("#1f2939"),
+        /*tabActive*/ QStringLiteral("#18202f"),
+        /*tabInactive*/ QStringLiteral("rgba(255, 255, 255, 0.03)"),
+        /*border*/ QStringLiteral("rgba(255, 255, 255, 0.07)"),
+        /*text*/ QStringLiteral("#e8edf7"),
+        /*textMuted*/ QStringLiteral("#8b97ad"),
+        /*accent*/ QStringLiteral("#6ea8fe"),
+        /*accent2*/ QStringLiteral("#8f7bff"),
+        /*accentText*/ QStringLiteral("#06090f"),
+        /*danger*/ QStringLiteral("#e05561"),
+        /*field*/ QStringLiteral("rgba(255, 255, 255, 0.05)"),
+        /*fieldText*/ QStringLiteral("#e8edf7"),
+        /*shadow*/ QStringLiteral("rgba(0, 0, 0, 0.6)"),
+        /*rail*/ QStringLiteral("rgba(255, 255, 255, 0.02)"),
+        /*card*/ QStringLiteral("rgba(255, 255, 255, 0.055)"),
+        /*cardBorder*/ QStringLiteral("rgba(255, 255, 255, 0.09)"),
+        /*chip*/ QStringLiteral("rgba(255, 255, 255, 0.07)"),
     };
 }
 
 Theme::Colors Theme::lightColors()
 {
     return {
-        /*background*/ QStringLiteral("#eef1f9"),
-        /*surface*/ QStringLiteral("#ffffff"),
-        /*surfaceHover*/ QStringLiteral("#e7ebf6"),
-        /*surfaceActive*/ QStringLiteral("#dbe1f0"),
-        /*tabActive*/ QStringLiteral("#ffffff"),
-        /*tabInactive*/ QStringLiteral("#e2e7f3"),
-        /*border*/ QStringLiteral("#d5dcec"),
-        /*text*/ QStringLiteral("#161b2b"),
-        /*textMuted*/ QStringLiteral("#5c657d"),
-        /*accent*/ QStringLiteral("#6a44ff"),
-        /*accent2*/ QStringLiteral("#2f7bff"),
+        /*background*/ QStringLiteral("#eef1f7"),
+        /*surface*/ QStringLiteral("#f7f9fc"),
+        /*surfaceHover*/ QStringLiteral("rgba(15, 25, 50, 0.055)"),
+        /*surfaceActive*/ QStringLiteral("rgba(15, 25, 50, 0.09)"),
+        /*tabActive*/ QStringLiteral("rgba(255, 255, 255, 0.92)"),
+        /*tabInactive*/ QStringLiteral("rgba(255, 255, 255, 0.45)"),
+        /*border*/ QStringLiteral("rgba(15, 25, 50, 0.10)"),
+        /*text*/ QStringLiteral("#131822"),
+        /*textMuted*/ QStringLiteral("#5c6678"),
+        /*accent*/ QStringLiteral("#2f6bd8"),
+        /*accent2*/ QStringLiteral("#6b53d6"),
         /*accentText*/ QStringLiteral("#ffffff"),
-        /*danger*/ QStringLiteral("#d9384f"),
-        /*field*/ QStringLiteral("#ffffff"),
-        /*fieldText*/ QStringLiteral("#161b2b"),
-        /*shadow*/ QStringLiteral("rgba(20, 25, 45, 0.18)"),
-        /*rail*/ QStringLiteral("#ffffff"),
-        /*card*/ QStringLiteral("rgba(255, 255, 255, 0.86)"),
-        /*cardBorder*/ QStringLiteral("rgba(20, 30, 60, 0.10)"),
-        /*chip*/ QStringLiteral("rgba(20, 30, 60, 0.06)"),
+        /*danger*/ QStringLiteral("#c9372f"),
+        /*field*/ QStringLiteral("rgba(255, 255, 255, 0.85)"),
+        /*fieldText*/ QStringLiteral("#131822"),
+        /*shadow*/ QStringLiteral("rgba(16, 22, 40, 0.16)"),
+        /*rail*/ QStringLiteral("rgba(255, 255, 255, 0.55)"),
+        /*card*/ QStringLiteral("rgba(255, 255, 255, 0.66)"),
+        /*cardBorder*/ QStringLiteral("rgba(255, 255, 255, 0.75)"),
+        /*chip*/ QStringLiteral("rgba(15, 25, 50, 0.05)"),
     };
 }
 
@@ -86,6 +101,7 @@ QString Theme::fontFamily()
 
 void Theme::apply(bool dark)
 {
+    g_dark = dark;
     const auto colors = dark ? darkColors() : lightColors();
 
     QPalette palette;
@@ -130,8 +146,11 @@ QWidget {
 QMainWindow, QDialog { background: %BACKGROUND%; }
 
 /* ---- Left navigation rail ------------------------------------------- */
+/* A soft top-to-bottom sheen so the rail reads as a glass panel rather than
+   as a flat column of colour. */
 QWidget#sideBar {
-    background: %RAIL%;
+    background: qlineargradient(x1:0, y1:0, x2:1, y2:0,
+        stop:0 %GLASS_RAIL%, stop:1 %GLASS_RAIL_EDGE%);
     border-right: 1px solid %BORDER%;
 }
 QToolButton#railButton {
@@ -145,8 +164,11 @@ QToolButton#railButton:hover { background: %SURFACE_HOVER%; color: %TEXT%; }
 QToolButton#railButton:checked { background: %SURFACE_ACTIVE%; color: %TEXT%; }
 
 /* ---- Top chrome ------------------------------------------------------ */
+/* The same sheen as the rail: lighter where the light falls, so the bar looks
+   like a sheet of glass lying on the window. */
 QWidget#navigationBar {
-    background: %SURFACE%;
+    background: qlineargradient(x1:0, y1:0, x2:0, y2:1,
+        stop:0 %GLASS_TOP%, stop:1 %GLASS_TOP_EDGE%);
     border-bottom: 1px solid %BORDER%;
 }
 QLabel#brandLabel { color: %TEXT%; font-weight: 600; letter-spacing: 0.04em; }
@@ -173,17 +195,16 @@ QToolButton#navButton:pressed { background: %SURFACE_ACTIVE%; }
 QToolButton#navButton:disabled { color: %TEXT_MUTED%; }
 
 /* ---- Address bar ----------------------------------------------------- */
+/* The pill itself is painted in AddressBar::paintEvent() as glass, so the
+   style sheet must leave the background alone. */
 QLineEdit#addressBar {
-    background: %FIELD%;
+    background: transparent;
+    border: none;
     color: %FIELD_TEXT%;
-    border: 1px solid %BORDER%;
-    border-radius: 18px;
     padding: 7px 18px;
     selection-background-color: %ACCENT%;
     selection-color: %ACCENT_TEXT%;
 }
-QLineEdit#addressBar:hover { border-color: %SURFACE_ACTIVE%; }
-QLineEdit#addressBar:focus { border-color: %ACCENT%; }
 
 QProgressBar#pageProgress { background: transparent; border: none; }
 QProgressBar#pageProgress::chunk { background: %ACCENT_GRADIENT%; border-radius: 1px; }
@@ -332,13 +353,10 @@ QWidget#homePage { background: transparent; }
 QScrollArea#homeScroll { background: transparent; border: none; }
 QScrollArea#homeScroll > QWidget > QWidget { background: transparent; }
 
-QFrame#homeCard {
-    background: %CARD%;
-    border: 1px solid %CARD_BORDER%;
-    border-radius: 18px;
-}
-QFrame#homeCard[dragging="true"] { border: 1px solid %ACCENT%; }
-QFrame#homeCard[dropTarget="true"] { border: 1px solid %ACCENT%; }
+/* HomeWidget::paintEvent() draws the glass card, including its drag and
+   drop-target states. */
+QFrame#homeCard { background: transparent; border: none; }
+QFrame#homeCard[hero="true"] { background: transparent; }
 QLabel#cardTitle { color: %TEXT%; font-weight: 600; }
 QLabel#cardSubtle { color: %TEXT_MUTED%; }
 QToolButton#cardMenu {
@@ -376,9 +394,9 @@ QToolButton#siteTile {
 }
 QToolButton#siteTile:hover { background: %SURFACE_HOVER%; }
 
-QLabel#heroWordmark { color: %TEXT%; }
+QFrame#homeCard[hero="true"] { background: transparent; }
 
-QPushButton#listRow {
+QLabel#heroWordmark { color: %TEXT%; }
     background: transparent;
     border: none;
     border-radius: 9px;
@@ -389,10 +407,6 @@ QPushButton#listRow {
 }
 QPushButton#listRow:hover { background: %SURFACE_HOVER%; }
 
-QFrame#homeCard[hero="true"] {
-    background: qlineargradient(x1:0, y1:0, x2:1, y2:1,
-        stop:0 rgba(34, 24, 78, 0.72), stop:1 rgba(15, 20, 48, 0.72));
-}
 QToolButton#cardAction {
     color: %ACCENT%;
     border-radius: 8px;
@@ -442,6 +456,18 @@ QListWidget#settingsNav::item:selected { background: %SURFACE_ACTIVE%; color: %T
         .replace(QStringLiteral("%FIELD%"), c.field)
         .replace(QStringLiteral("%FIELD_TEXT%"), c.fieldText)
         .replace(QStringLiteral("%RAIL%"), c.rail)
+        .replace(QStringLiteral("%GLASS_TOP%"),
+                 dark ? QStringLiteral("rgba(255, 255, 255, 0.055)")
+                      : QStringLiteral("rgba(255, 255, 255, 0.92)"))
+        .replace(QStringLiteral("%GLASS_TOP_EDGE%"),
+                 dark ? QStringLiteral("rgba(255, 255, 255, 0.018)")
+                      : QStringLiteral("rgba(255, 255, 255, 0.68)"))
+        .replace(QStringLiteral("%GLASS_RAIL%"),
+                 dark ? QStringLiteral("rgba(255, 255, 255, 0.035)")
+                      : QStringLiteral("rgba(255, 255, 255, 0.72)"))
+        .replace(QStringLiteral("%GLASS_RAIL_EDGE%"),
+                 dark ? QStringLiteral("rgba(255, 255, 255, 0.012)")
+                      : QStringLiteral("rgba(255, 255, 255, 0.5)"))
         .replace(QStringLiteral("%CARD%"), c.card)
         .replace(QStringLiteral("%CARD_BORDER%"), c.cardBorder)
         .replace(QStringLiteral("%CHIP%"), c.chip)

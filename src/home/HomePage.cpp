@@ -2,6 +2,7 @@
 #include "home/HomePage.h"
 
 #include "app/AppPaths.h"
+#include "core/Theme.h"
 #include "home/HomeWidgets.h"
 
 #include <QDateTime>
@@ -23,6 +24,34 @@
 namespace yozora {
 
 namespace {
+
+// Bumped whenever the home page geometry changes. A layout written by an older
+// version is re-flowed to the new grid, but the per-widget settings (pinned
+// sites, notes text) are always preserved - a redesign must never throw away
+// what the user put on their page.
+constexpr int kLayoutVersion = 3;
+
+// The compact home-screen arrangement. Widths are a fraction of the canvas,
+// heights are pixels.
+struct DefaultCard {
+    const char* type;
+    qreal x;
+    int y;
+    qreal w;
+    int h;
+};
+
+const DefaultCard kDefaultCards[] = {
+    {"sites", 0.0, 0, 0.655, 208},
+    {"quickaccess", 0.675, 0, 0.325, 208},
+    {"history", 0.0, 220, 0.485, 196},
+    {"bookmarks", 0.515, 220, 0.485, 196},
+    {"stats", 0.0, 428, 0.315, 178},
+    {"privacy", 0.3425, 428, 0.315, 178},
+    {"weather", 0.6725, 428, 0.3275, 178},
+    {"clock", 0.0, 618, 0.315, 150},
+    {"notes", 0.3425, 618, 0.6575, 150},
+};
 
 void paintNightSky(QPainter& painter, const QRect& rect, bool dark)
 {
@@ -94,7 +123,12 @@ HomePage::HomePage(const HomeContext& context, QWidget* parent)
     m_hero = new SearchWidget(m_context, this);
     m_hero->setFixed(true);
     connect(m_hero, &SearchWidget::searchRequested, this, &HomePage::searchRequested);
-    root->addWidget(m_hero);
+    // Centred horizontally, and given breathing room above the widget board so
+    // it sits in the upper third of the window rather than glued to the top.
+    m_hero->setFixedHeight(250);
+    m_hero->setSizePolicy(QSizePolicy::Fixed, QSizePolicy::Fixed);
+    root->addWidget(m_hero, 0, Qt::AlignHCenter);
+    root->addSpacing(6);
 
     // The canvas holds every movable widget, absolutely positioned.
     m_scroll = new QScrollArea(this);
@@ -195,47 +229,68 @@ void HomePage::buildDefaultLayout()
     m_widgets.clear();
     m_placements.clear();
 
-    addDefaultWidget(QStringLiteral("sites"), Placement{0.0, 0, 1.0, 310});
-    addDefaultWidget(QStringLiteral("quickaccess"), Placement{0.0, 322, 1.0, 92});
-    addDefaultWidget(QStringLiteral("history"), Placement{0.0, 426, 0.485, 260});
-    addDefaultWidget(QStringLiteral("bookmarks"), Placement{0.515, 426, 0.485, 260});
-    addDefaultWidget(QStringLiteral("stats"), Placement{0.0, 698, 0.315, 250});
-    addDefaultWidget(QStringLiteral("privacy"), Placement{0.3425, 698, 0.315, 250});
-    addDefaultWidget(QStringLiteral("weather"), Placement{0.6725, 698, 0.3275, 250});
-    addDefaultWidget(QStringLiteral("notes"), Placement{0.0, 956, 0.485, 240});
-    addDefaultWidget(QStringLiteral("clock"), Placement{0.515, 956, 0.485, 240});
+    // Compact cards, close together: a home screen, not a dashboard.
+    for (const DefaultCard& card : kDefaultCards) {
+        addDefaultWidget(QString::fromLatin1(card.type),
+                         Placement{card.x, card.y, card.w, card.h});
+    }
 
     scheduleSave();
+}
+
+bool HomePage::defaultPlacementFor(const QString& type, Placement* out) const
+{
+    for (const DefaultCard& card : kDefaultCards) {
+        if (type == QLatin1String(card.type)) {
+            *out = Placement{card.x, card.y, card.w, card.h};
+            return true;
+        }
+    }
+    return false;
 }
 
 void HomePage::loadLayout()
 {
     QFile file(AppPaths::homeLayoutPath());
-    if (!file.open(QIODevice::ReadOnly)) {
-        buildDefaultLayout();
-        return;
+    QJsonDocument document;
+    if (file.open(QIODevice::ReadOnly)) {
+        document = QJsonDocument::fromJson(file.readAll());
     }
-    const QJsonDocument document = QJsonDocument::fromJson(file.readAll());
-    const QJsonArray array = document.isArray()
-        ? document.array()
-        : document.object().value(QStringLiteral("widgets")).toArray();
+
+    const QJsonObject root = document.object();
+    const int version = root.value(QStringLiteral("version")).toInt(0);
+    const QJsonArray array =
+        document.isArray() ? document.array() : root.value(QStringLiteral("widgets")).toArray();
     if (array.isEmpty()) {
         buildDefaultLayout();
         return;
     }
+
+    const bool reflow = version < kLayoutVersion;
     for (const QJsonValue& value : array) {
         const QJsonObject object = value.toObject();
-        HomeWidget* widget = createWidget(object.value(QStringLiteral("type")).toString());
+        const QString type = object.value(QStringLiteral("type")).toString();
+        HomeWidget* widget = createWidget(type);
         if (!widget) {
             continue;
         }
+        // Always restored: this is the user's own data, not layout.
         widget->restore(object);
+
         Placement placement;
-        placement.x = qBound(0.0, object.value(QStringLiteral("x")).toDouble(), 1.0);
-        placement.y = qMax(0, object.value(QStringLiteral("y")).toInt());
-        placement.w = qBound(0.05, object.value(QStringLiteral("w")).toDouble(), 1.0);
-        placement.h = qMax(120, object.value(QStringLiteral("h")).toInt());
+        if (reflow && defaultPlacementFor(type, &placement)) {
+            // The old pixel positions do not fit the compact grid.
+        } else {
+            placement.x = qBound(0.0, object.value(QStringLiteral("x")).toDouble(), 1.0);
+            placement.y = qMax(0, object.value(QStringLiteral("y")).toInt());
+            placement.w = qBound(0.05, object.value(QStringLiteral("w")).toDouble(), 1.0);
+            placement.h = qMax(120, object.value(QStringLiteral("h")).toInt());
+        }
         placeWidget(widget, placement, true);
+    }
+
+    if (m_widgets.isEmpty()) {
+        buildDefaultLayout();
     }
 }
 
@@ -311,7 +366,10 @@ void HomePage::saveLayout() const
     if (!file.open(QIODevice::WriteOnly)) {
         return;
     }
-    file.write(QJsonDocument(array).toJson(QJsonDocument::Indented));
+    QJsonObject root;
+    root.insert(QStringLiteral("version"), kLayoutVersion);
+    root.insert(QStringLiteral("widgets"), array);
+    file.write(QJsonDocument(root).toJson(QJsonDocument::Indented));
     file.commit();
 }
 
@@ -390,7 +448,7 @@ void HomePage::paintEvent(QPaintEvent* event)
 {
     Q_UNUSED(event)
     QPainter painter(this);
-    const bool dark = palette().color(QPalette::Window).lightness() < 128;
+    const bool dark = Theme::isDark();
     paintNightSky(painter, rect(), dark);
 }
 

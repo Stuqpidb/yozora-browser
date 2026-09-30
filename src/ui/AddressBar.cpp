@@ -1,10 +1,13 @@
 // SPDX-License-Identifier: MIT
 #include "ui/AddressBar.h"
 
+#include "core/Glass.h"
+#include "core/Theme.h"
 #include "utils/UrlUtils.h"
 
 #include <QFocusEvent>
 #include <QFont>
+#include <QLinearGradient>
 #include <QPaintEvent>
 #include <QPainter>
 #include <QPen>
@@ -24,6 +27,25 @@ AddressBar::AddressBar(QWidget* parent)
 
 void AddressBar::paintEvent(QPaintEvent* event)
 {
+    const bool dark = Theme::isDark();
+    const Theme::Colors c = dark ? Theme::darkColors() : Theme::lightColors();
+    const Glass::Recipe glass = Glass::recipe(dark, height() / 2.0);
+
+    QPainter glassPainter(this);
+    glassPainter.setRenderHint(QPainter::Antialiasing, true);
+    const QRectF pill(0.5, 0.5, width() - 1.0, height() - 1.0);
+    Glass::paintShadow(glassPainter, pill, glass, 0.7);
+    Glass::paintPanel(glassPainter, pill, glass, 1.0);
+
+    // A quiet focus ring on top of the glass, so the field still reads as
+    // focused without losing the material.
+    if (hasFocus()) {
+        glassPainter.setBrush(Qt::NoBrush);
+        glassPainter.setPen(QPen(QColor(c.accent), 1.3));
+        glassPainter.drawRoundedRect(pill.adjusted(0.5, 0.5, -0.5, -0.5), height() / 2.0,
+                                     height() / 2.0);
+    }
+
     QLineEdit::paintEvent(event);
 
     QPainter painter(this);

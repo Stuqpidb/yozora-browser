@@ -1,15 +1,15 @@
 // SPDX-License-Identifier: MIT
 #include "ui/SideBar.h"
 
-#include <QFont>
-#include <QToolButton>
+#include "ui/RailButton.h"
+
 #include <QVBoxLayout>
 
 namespace yozora {
 
 namespace {
-constexpr int kRailWidth = 70;
-constexpr int kButtonSize = 50;
+constexpr int kRailWidth = 72;
+constexpr int kButtonSize = 48;
 }  // namespace
 
 SideBar::SideBar(QWidget* parent)
@@ -18,48 +18,48 @@ SideBar::SideBar(QWidget* parent)
 {
     setObjectName(QStringLiteral("sideBar"));
     setFixedWidth(kRailWidth);
-    m_layout->setContentsMargins(0, 12, 0, 12);
+    m_layout->setContentsMargins(0, 14, 0, 14);
     m_layout->setSpacing(6);
     m_layout->setAlignment(Qt::AlignHCenter);
 
-    m_homeButton = makeButton(QStringLiteral("\u2302"), tr("Home (Ctrl+Shift+H)"), true);
-    connect(m_homeButton, &QToolButton::clicked, this, &SideBar::homeRequested);
+    m_homeButton = new RailButton(RailIcon::Home, tr("Home (Ctrl+Shift+H)"), this);
+    makeButton(m_homeButton, tr("Home (Ctrl+Shift+H)"));
+    connect(m_homeButton, &RailButton::clicked, this, &SideBar::homeRequested);
 
-    auto* history = makeButton(QStringLiteral("\u27F2"), tr("History"));
-    connect(history, &QToolButton::clicked, this, &SideBar::historyRequested);
+    auto* history = new RailButton(RailIcon::History, tr("History"), this);
+    makeButton(history, tr("History"));
+    connect(history, &RailButton::clicked, this, &SideBar::historyRequested);
 
-    auto* bookmarks = makeButton(QStringLiteral("\u2691"), tr("Bookmarks"));
-    connect(bookmarks, &QToolButton::clicked, this, &SideBar::bookmarksRequested);
+    auto* bookmarks = new RailButton(RailIcon::Bookmarks, tr("Bookmarks"), this);
+    makeButton(bookmarks, tr("Bookmarks"));
+    connect(bookmarks, &RailButton::clicked, this, &SideBar::bookmarksRequested);
 
-    auto* downloads = makeButton(QStringLiteral("\u21E9"), tr("Downloads"));
-    connect(downloads, &QToolButton::clicked, this, &SideBar::downloadsRequested);
+    auto* downloads = new RailButton(RailIcon::Downloads, tr("Downloads"), this);
+    makeButton(downloads, tr("Downloads"));
+    connect(downloads, &RailButton::clicked, this, &SideBar::downloadsRequested);
 
-    auto* profile = makeButton(QStringLiteral("\u25D0"), tr("New private window"));
-    connect(profile, &QToolButton::clicked, this, &SideBar::privateRequested);
+    auto* profile = new RailButton(RailIcon::Private, tr("New private window"), this);
+    makeButton(profile, tr("New private window"));
+    connect(profile, &RailButton::clicked, this, &SideBar::privateRequested);
 
     m_layout->addStretch(1);
 
-    m_themeButton = makeButton(QStringLiteral("\u263E"), tr("Light theme"));
-    connect(m_themeButton, &QToolButton::clicked, this, &SideBar::themeToggleRequested);
+    m_themeButton = new RailButton(RailIcon::Moon, tr("Light theme"), this);
+    makeButton(m_themeButton, tr("Light theme"));
+    connect(m_themeButton, &RailButton::clicked, this, &SideBar::themeToggleRequested);
 
-    auto* settings = makeButton(QStringLiteral("\u2699"), tr("Settings (Ctrl+,)"));
-    connect(settings, &QToolButton::clicked, this, &SideBar::settingsRequested);
+    auto* settings = new RailButton(RailIcon::Settings, tr("Settings (Ctrl+,)"), this);
+    makeButton(settings, tr("Settings (Ctrl+,)"));
+    connect(settings, &RailButton::clicked, this, &SideBar::settingsRequested);
 }
 
-QToolButton* SideBar::makeButton(const QString& glyph, const QString& tooltip, bool checkable)
+RailButton* SideBar::makeButton(RailButton* button, const QString& tooltip)
 {
-    auto* button = new QToolButton(this);
     button->setObjectName(QStringLiteral("railButton"));
-    button->setText(glyph);
     button->setToolTip(tooltip);
-    button->setCheckable(checkable);
-    button->setFocusPolicy(Qt::NoFocus);
-    button->setCursor(Qt::PointingHandCursor);
     button->setFixedSize(kButtonSize, kButtonSize);
-    QFont font = button->font();
-    font.setPointSizeF(21.0);
-    button->setFont(font);
     m_layout->addWidget(button, 0, Qt::AlignHCenter);
+    m_buttons.append(button);
     return button;
 }
 
@@ -70,8 +70,11 @@ void SideBar::setHomeActive(bool active)
 
 void SideBar::setDarkTheme(bool dark)
 {
+    m_themeButton->setIcon(dark ? RailIcon::Sun : RailIcon::Moon);
     m_themeButton->setToolTip(dark ? tr("Light theme") : tr("Dark theme"));
-    m_themeButton->setText(dark ? QStringLiteral("\u2600") : QStringLiteral("\u263E"));
+    for (RailButton* button : m_buttons) {
+        button->setDarkTheme(dark);
+    }
 }
 
 }  // namespace yozora

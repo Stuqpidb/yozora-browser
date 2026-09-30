@@ -1,4 +1,6 @@
-﻿// SPDX-License-Identifier: MIT
+// SPDX-License-Identifier: MIT
+#include "core/Glass.h"
+#include "home/FlowLayout.h"
 #include "home/HomeWidgets.h"
 
 #include "core/BookmarkStore.h"
@@ -53,9 +55,11 @@ QIcon letterAvatar(const QString& text, const QString& seed)
     painter.setRenderHint(QPainter::Antialiasing, true);
     painter.setPen(Qt::NoPen);
     painter.setBrush(color);
-    painter.drawRoundedRect(QRectF(6, 6, 84, 84), 24, 24);
+    // A superellipse, not a rounded square: this is the shape that makes a
+    // grid of icons read as a home screen rather than as a list of buttons.
+    painter.drawPath(Glass::squircle(QRectF(4, 4, 88, 88), 26));
     QFont font;
-    font.setPointSizeF(36);
+    font.setPointSizeF(38);
     font.setWeight(QFont::DemiBold);
     painter.setFont(font);
     painter.setPen(Qt::white);
@@ -97,6 +101,11 @@ SearchWidget::SearchWidget(const HomeContext& context, QWidget* parent)
     : HomeWidget(context, parent)
 {
     setProperty("hero", true);
+    // The hero sits directly on the night sky, so it must not paint a
+    // background of its own. WA_TranslucentBackground is what actually
+    // guarantees that; clearing the backing store in paintEvent() is not
+    // enough on its own.
+    setAttribute(Qt::WA_TranslucentBackground, true);
     auto* layout = bodyLayout();
     layout->setAlignment(Qt::AlignCenter);
 
@@ -116,8 +125,8 @@ SearchWidget::SearchWidget(const HomeContext& context, QWidget* parent)
     m_field = new QLineEdit(body());
     m_field->setObjectName(QStringLiteral("heroSearch"));
     m_field->setPlaceholderText(tr("Search the web or enter a URL..."));
-    m_field->setMinimumWidth(560);
-    m_field->setMaximumWidth(760);
+    m_field->setMinimumWidth(480);
+    m_field->setMaximumWidth(600);
     m_field->setFixedHeight(50);
     connect(m_field, &QLineEdit::returnPressed, this, [this] {
         const QString text = m_field->text().trimmed();
@@ -156,6 +165,10 @@ SitesWidget::SitesWidget(const HomeContext& context, QWidget* parent)
     m_grid = new QGridLayout;
     m_grid->setSpacing(12);
     m_grid->setContentsMargins(0, 0, 0, 0);
+    // Keep the icons packed to the left instead of letting the grid stretch
+    // them across the whole card: a home screen is a dense grid, not a
+    // justified row.
+    m_grid->setAlignment(Qt::AlignLeft | Qt::AlignTop);
     bodyLayout()->addLayout(m_grid);
 
     m_sites = {
@@ -178,18 +191,18 @@ void SitesWidget::rebuild()
         delete item;
     }
 
-    constexpr int kColumns = 6;
+    constexpr int kColumns = 8;
     int index = 0;
     for (const Site& site : m_sites) {
         auto* tile = new QToolButton(body());
         tile->setObjectName(QStringLiteral("siteTile"));
         tile->setToolButtonStyle(Qt::ToolButtonTextUnderIcon);
         tile->setIcon(letterAvatar(site.title, site.url));
-        tile->setIconSize(QSize(52, 52));
+        tile->setIconSize(QSize(42, 42));
         tile->setText(site.title);
         tile->setToolTip(site.url);
         tile->setCursor(Qt::PointingHandCursor);
-        tile->setFixedSize(140, 104);
+        tile->setFixedSize(92, 86);
         tile->setContextMenuPolicy(Qt::CustomContextMenu);
         const QString url = site.url;
         connect(tile, &QToolButton::clicked, this,
@@ -211,9 +224,9 @@ void SitesWidget::rebuild()
     add->setText(QStringLiteral("+"));
     add->setToolTip(tr("Add a site"));
     add->setCursor(Qt::PointingHandCursor);
-    add->setFixedSize(140, 104);
+    add->setFixedSize(92, 86);
     QFont addFont = add->font();
-    addFont.setPointSizeF(22);
+    addFont.setPointSizeF(20);
     add->setFont(addFont);
     connect(add, &QToolButton::clicked, this, &SitesWidget::addSiteDialog);
     m_grid->addWidget(add, index / kColumns, index % kColumns);
@@ -639,9 +652,9 @@ QuickAccessWidget::QuickAccessWidget(const HomeContext& context, QWidget* parent
     setTitle(tr("Quick access"));
 
     m_row = new QWidget(body());
-    auto* rowLayout = new QHBoxLayout(m_row);
-    rowLayout->setContentsMargins(0, 0, 0, 0);
-    rowLayout->setSpacing(10);
+    // Wrapping: the card is a fixed width, so a plain row would squeeze the
+    // chips until their labels were unreadable.
+    auto* rowLayout = new FlowLayout(m_row, 0, 8, 8);
     bodyLayout()->addWidget(m_row);
 
     m_items = {
@@ -656,7 +669,7 @@ QuickAccessWidget::QuickAccessWidget(const HomeContext& context, QWidget* parent
 
 void QuickAccessWidget::rebuild()
 {
-    auto* layout = qobject_cast<QHBoxLayout*>(m_row->layout());
+    auto* layout = qobject_cast<FlowLayout*>(m_row->layout());
     while (QLayoutItem* item = layout->takeAt(0)) {
         if (QWidget* widget = item->widget()) {
             widget->deleteLater();
@@ -693,7 +706,6 @@ void QuickAccessWidget::rebuild()
     add->setCursor(Qt::PointingHandCursor);
     connect(add, &QPushButton::clicked, this, &QuickAccessWidget::addShortcutDialog);
     layout->addWidget(add);
-    layout->addStretch(1);
 
     emit changed();
 }

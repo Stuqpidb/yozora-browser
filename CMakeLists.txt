@@ -79,6 +79,8 @@ add_library(yozora_core STATIC
     src/core/SearchEngine.cpp
     src/core/SearchEngine.h
     src/core/Settings.cpp
+    src/core/Glass.cpp
+    src/core/Glass.h
     src/core/Settings.h
     src/core/Theme.cpp
     src/core/Theme.h
@@ -86,6 +88,8 @@ add_library(yozora_core STATIC
     src/core/UpdateChecker.h
     src/home/HomePage.cpp
     src/home/HomePage.h
+    src/home/FlowLayout.cpp
+    src/home/FlowLayout.h
     src/home/HomeWidget.cpp
     src/home/HomeWidget.h
     src/home/HomeWidgets.cpp
@@ -106,6 +110,8 @@ add_library(yozora_core STATIC
     src/ui/NavigationBar.h
     src/ui/PermissionPrompt.cpp
     src/ui/PermissionPrompt.h
+    src/ui/RailButton.cpp
+    src/ui/RailButton.h
     src/ui/SettingsDialog.cpp
     src/ui/SettingsDialog.h
     src/ui/SideBar.cpp
@@ -151,6 +157,8 @@ if(MSVC)
         WIN32_LEAN_AND_MEAN
         _WIN32_WINNT=0x0A00
     )
+    # DwmSetWindowAttribute backs the native window material (Mica / Acrylic).
+    target_link_libraries(yozora_core PRIVATE dwmapi)
 else()
     target_compile_options(yozora_core PRIVATE -Wall -Wextra)
 endif()

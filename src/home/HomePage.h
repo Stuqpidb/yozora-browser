@@ -52,6 +52,9 @@ private:
 
     HomeWidget* createWidget(const QString& type);
     void buildDefaultLayout();
+    // Looks up the compact arrangement for a widget type, used when migrating
+    // a layout written by an older version.
+    [[nodiscard]] bool defaultPlacementFor(const QString& type, Placement* out) const;
     void loadLayout();
     void placeWidget(HomeWidget* widget, const Placement& placement, bool userPlaced);
     void layoutCanvas();

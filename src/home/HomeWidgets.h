@@ -15,6 +15,7 @@ class QNetworkReply;
 class QTextEdit;
 class QTimer;
 class QGridLayout;
+class QHBoxLayout;
 
 namespace yozora {
 

@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: MIT
 #include "ui/TabStrip.h"
 
+#include "core/Glass.h"
 #include "core/Theme.h"
 
 #include <QFontMetrics>
@@ -21,6 +22,13 @@ constexpr int kMinTabWidth = 110;
 constexpr int kMaxTabWidth = 220;
 constexpr int kCloseSize = 18;
 constexpr int kPlusWidth = 34;
+
+QColor withAlphaColor(const QColor& color, int alpha)
+{
+    QColor result = color;
+    result.setAlpha(alpha);
+    return result;
+}
 }  // namespace
 
 TabStrip::TabStrip(QWidget* parent)
@@ -116,6 +124,7 @@ int TabStrip::dropIndexFor(const QPoint& pos) const
 void TabStrip::paintEvent(QPaintEvent*)
 {
     const Theme::Colors c = m_dark ? Theme::darkColors() : Theme::lightColors();
+    const Glass::Recipe glass = Glass::recipe(m_dark, 11);
     QPainter painter(this);
     painter.setRenderHint(QPainter::Antialiasing, true);
     painter.fillRect(rect(), QColor(c.background));
@@ -143,13 +152,34 @@ void TabStrip::paintEvent(QPaintEvent*)
         const bool selected = (i == m_current);
         const bool hovered = (i == m_hover) && !m_dragging;
 
-        QColor bg = selected ? QColor(c.tabActive) : QColor(c.tabInactive);
-        if (hovered && !selected) {
-            bg = QColor(c.surfaceHover);
+        // The active tab is a real glass surface: shadow, translucent body, top
+        // highlight, hairline. Inactive tabs stay nearly invisible until the
+        // pointer is over them, which keeps the strip calm.
+        if (selected) {
+            Glass::paintShadow(painter, QRectF(tab), glass, 0.9);
+            Glass::paintPanel(painter, QRectF(tab), glass, 1.0);
+        } else {
+            if (hovered) {
+                Glass::paintChip(painter, QRectF(tab), glass, 1.0);
+            } else {
+                painter.setPen(Qt::NoPen);
+                painter.setBrush(QColor(c.tabInactive));
+                painter.drawRoundedRect(tab, 11, 11);
+            }
         }
-        painter.setPen(selected ? QPen(QColor(c.border)) : Qt::NoPen);
-        painter.setBrush(bg);
-        painter.drawRoundedRect(tab, 10, 10);
+
+        // A short accent bar under the active tab: the same trick the old
+        // design used, kept because it reads at a glance.
+        if (selected) {
+            const QRect marker(tab.center().x() - 11, tab.bottom() - 2, 22, 2);
+            QLinearGradient bar(marker.topLeft(), marker.topRight());
+            bar.setColorAt(0.0, withAlphaColor(QColor(c.accent), 0));
+            bar.setColorAt(0.5, QColor(c.accent));
+            bar.setColorAt(1.0, withAlphaColor(QColor(c.accent), 0));
+            painter.setPen(Qt::NoPen);
+            painter.setBrush(bar);
+            painter.drawRoundedRect(marker, 1, 1);
+        }
 
         // Favicon or a placeholder dot.
         QRect iconRect(tab.left() + 11, tab.top() + (tab.height() - 16) / 2, 16, 16);

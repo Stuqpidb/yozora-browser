@@ -3,6 +3,7 @@
 
 #include "browser/BrowserTab.h"
 #include "core/BookmarkStore.h"
+#include "core/Glass.h"
 #include "core/HistoryStore.h"
 #include "core/SearchEngine.h"
 #include "core/Settings.h"
@@ -35,6 +36,7 @@
 #include <QMessageBox>
 #include <QPointer>
 #include <QShortcut>
+#include <QShowEvent>
 #include <QStackedWidget>
 #include <QStatusBar>
 #include <QVBoxLayout>
@@ -743,6 +745,15 @@ void BrowserWindow::applyTheme(bool dark)
         tab->setDarkMode(dark);
     }
     update();
+}
+
+void BrowserWindow::showEvent(QShowEvent* event)
+{
+    QMainWindow::showEvent(event);
+    // The native window handle only exists once the window is shown, so the
+    // Mica / Acrylic request has to be made here rather than in the
+    // constructor.
+    Glass::applyWindowBackdrop(this, isDark());
 }
 
 void BrowserWindow::closeEvent(QCloseEvent* event)

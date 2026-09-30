@@ -3,6 +3,7 @@
 
 #include <QFrame>
 #include <QJsonObject>
+#include <QPaintEvent>
 #include <QPoint>
 #include <QRect>
 #include <QString>
@@ -85,6 +86,9 @@ protected:
     void mousePressEvent(QMouseEvent* event) override;
     void mouseMoveEvent(QMouseEvent* event) override;
     void mouseReleaseEvent(QMouseEvent* event) override;
+    // The card body is painted here rather than by a style sheet, because glass
+    // needs a shadow, a top highlight and a grain that QSS cannot express.
+    void paintEvent(QPaintEvent* event) override;
 
 private:
     [[nodiscard]] QRect headerRect() const;
