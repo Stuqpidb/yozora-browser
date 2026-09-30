@@ -71,6 +71,7 @@ private:
 
     QRadioButton* m_darkTheme = nullptr;
     QRadioButton* m_lightTheme = nullptr;
+    QCheckBox* m_smoothScrolling = nullptr;
 
     QLabel* m_storagePath = nullptr;
     QListWidget* m_permissionList = nullptr;

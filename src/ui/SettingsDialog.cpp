@@ -86,6 +86,7 @@ SettingsDialog::SettingsDialog(Settings* settings, WebProfile* profile, QWidget*
     connect(m_restoreSession, &QCheckBox::toggled, this, &SettingsDialog::applyToSettings);
     connect(m_darkTheme, &QRadioButton::toggled, this, &SettingsDialog::applyToSettings);
     connect(m_lightTheme, &QRadioButton::toggled, this, &SettingsDialog::applyToSettings);
+    connect(m_smoothScrolling, &QCheckBox::toggled, this, &SettingsDialog::applyToSettings);
 
     connect(m_blockThirdPartyCookies, &QCheckBox::toggled, this, &SettingsDialog::applyToSettings);
     connect(m_keepCookies, &QCheckBox::toggled, this, &SettingsDialog::applyToSettings);
@@ -277,6 +278,16 @@ QWidget* SettingsDialog::buildAppearanceSection()
     boxLayout->addStretch(1);
 
     layout->addWidget(box);
+
+    auto* scrollBox = new QGroupBox(tr("Scrolling"), page);
+    auto* scrollLayout = new QVBoxLayout(scrollBox);
+    m_smoothScrolling = new QCheckBox(tr("Smooth scrolling (animated)"), scrollBox);
+    scrollLayout->addWidget(m_smoothScrolling);
+    scrollLayout->addWidget(hint(tr("Off: the page follows the wheel instantly, which feels "
+                                    "faster and sharper. On: every step is animated."),
+                                 scrollBox));
+    layout->addWidget(scrollBox);
+
     layout->addStretch(1);
     return page;
 }
@@ -395,6 +406,8 @@ void SettingsDialog::loadFromSettings()
         const bool dark = m_settings->themeMode() != Settings::ThemeMode::Light;
         m_darkTheme->setChecked(dark);
         m_lightTheme->setChecked(!dark);
+
+        m_smoothScrolling->setChecked(m_settings->smoothScrolling());
     }
 
     if (m_profile) {
@@ -417,6 +430,7 @@ void SettingsDialog::applyToSettings()
     m_settings->setRestoreSessionOnStart(m_restoreSession->isChecked());
     m_settings->setThemeMode(m_darkTheme->isChecked() ? Settings::ThemeMode::Dark
                                                        : Settings::ThemeMode::Light);
+    m_settings->setSmoothScrolling(m_smoothScrolling->isChecked());
 
     m_settings->setBlockThirdPartyCookies(m_blockThirdPartyCookies->isChecked());
     m_settings->setKeepCookiesOnExit(m_keepCookies->isChecked());

@@ -51,6 +51,14 @@ WebProfile::WebProfile(Settings* settings, bool ephemeral, QObject* parent)
     if (m_settings) {
         connect(m_settings, &Settings::cookiePolicyChanged, this,
                 &WebProfile::applyPrivacySettings);
+        // Scrolling feel: instant by default (sharp and fast), animated when the
+        // user asks for smooth scrolling.
+        connect(m_settings, &Settings::smoothScrollingChanged, this, [this] {
+            if (m_profile && m_settings) {
+                m_profile->settings()->setAttribute(QWebEngineSettings::ScrollAnimatorEnabled,
+                                                    m_settings->smoothScrolling());
+            }
+        });
     }
 }
 
@@ -74,7 +82,11 @@ void WebProfile::configureProfile()
     settings->setAttribute(QWebEngineSettings::JavascriptCanOpenWindows, true);
     settings->setAttribute(QWebEngineSettings::JavascriptCanAccessClipboard, true);
     settings->setAttribute(QWebEngineSettings::JavascriptCanPaste, true);
-    settings->setAttribute(QWebEngineSettings::ScrollAnimatorEnabled, true);
+    // Instant scrolling by default: it reads as fast and direct, closer to the
+    // native Windows feel, instead of the slow eased animation. The user can
+    // turn smooth scrolling back on in Settings > Appearance.
+    settings->setAttribute(QWebEngineSettings::ScrollAnimatorEnabled,
+                           m_settings ? m_settings->smoothScrolling() : false);
 
     // Yozora renders its own error page instead of Chromium's.
     settings->setAttribute(QWebEngineSettings::ErrorPageEnabled, false);

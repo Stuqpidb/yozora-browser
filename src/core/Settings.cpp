@@ -25,6 +25,7 @@ constexpr auto kKeyHomePage = "browser/home_page";
 constexpr auto kKeyDownloadDir = "downloads/directory";
 constexpr auto kKeyAskWhereToSave = "downloads/ask_where_to_save";
 constexpr auto kKeyThemeMode = "appearance/theme_mode";
+constexpr auto kKeySmoothScrolling = "appearance/smooth_scrolling";
 constexpr auto kKeyWindowGeometry = "window/geometry";
 constexpr auto kKeyWindowState = "window/state";
 constexpr auto kKeyRestoreSession = "session/restore_on_start";
@@ -199,6 +200,20 @@ void Settings::setWindowGeometry(const QByteArray& geometry)
     d->store.setValue(QLatin1String(kKeyWindowGeometry), geometry);
 }
 
+bool Settings::smoothScrolling() const
+{
+    return d->store.value(QLatin1String(kKeySmoothScrolling), false).toBool();
+}
+
+void Settings::setSmoothScrolling(bool smooth)
+{
+    if (smoothScrolling() == smooth) {
+        return;
+    }
+    d->store.setValue(QLatin1String(kKeySmoothScrolling), smooth);
+    emit smoothScrollingChanged();
+}
+
 QByteArray Settings::windowState() const
 {
     return d->store.value(QLatin1String(kKeyWindowState)).toByteArray();
@@ -339,6 +354,7 @@ void Settings::resetToDefaults()
     emit homePageChanged();
     emit downloadDirectoryChanged();
     emit themeModeChanged();
+    emit smoothScrollingChanged();
     emit cookiePolicyChanged();
     emit trackerBlockingChanged();
     emit doNotTrackChanged();

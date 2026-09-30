@@ -53,6 +53,12 @@ public:
     [[nodiscard]] ThemeMode themeMode() const;
     void setThemeMode(ThemeMode mode);
 
+    // When false (the default) the engine scrolls instantly, which feels
+    // sharp and fast, like Chrome with smooth scrolling turned off. When true
+    // the engine animates every scroll step.
+    [[nodiscard]] bool smoothScrolling() const;
+    void setSmoothScrolling(bool smooth);
+
     [[nodiscard]] QByteArray windowGeometry() const;
     void setWindowGeometry(const QByteArray& geometry);
 
@@ -107,6 +113,7 @@ signals:
     void homePageChanged();
     void downloadDirectoryChanged();
     void themeModeChanged();
+    void smoothScrollingChanged();
     void cookiePolicyChanged();
     void trackerBlockingChanged();
     void doNotTrackChanged();
