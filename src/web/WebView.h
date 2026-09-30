@@ -1,10 +1,15 @@
 // SPDX-License-Identifier: MIT
 #pragma once
 
+#include "core/Settings.h"
+
 #include <QPoint>
+#include <QPointF>
 #include <QWebEngineView>
 
 class QMenu;
+class QTimer;
+class QWheelEvent;
 class QWebEngineProfile;
 class QWebEngineContextMenuRequest;
 
@@ -29,6 +34,11 @@ public:
     // scrollbars match the shell theme.
     void setDarkMode(bool dark);
 
+    // Selects how the mouse wheel scrolls. Only Settings::ScrollMode::Fast
+    // makes this class animate anything; the other modes are handled by the
+    // engine.
+    void setScrollMode(Settings::ScrollMode mode);
+
 signals:
     // Raised by context-menu actions that belong to the shell, not the page.
     void newTabRequested(const QUrl& url, bool foreground);
@@ -36,6 +46,7 @@ signals:
 
 protected:
     void contextMenuEvent(QContextMenuEvent* event) override;
+    void wheelEvent(QWheelEvent* event) override;
 
 private:
     void buildContextMenu(QWebEngineContextMenuRequest* request, const QPoint& globalPos);
@@ -44,7 +55,17 @@ private:
     void addLinkActions(QMenu* menu, const QUrl& link);
     void addImageActions(QMenu* menu, const QUrl& image);
 
+    // Advances the custom "Fast" wheel animation by one frame.
+    void stepSmoothScroll();
+
     void showStatusMessage(const QString& message);
+
+    Settings::ScrollMode m_scrollMode = Settings::ScrollMode::Fast;
+    QTimer* m_smoothTimer = nullptr;
+    QPointF m_pendingScroll;      // pixels still to scroll (x, y)
+    QPointF m_lastWheelPos;
+    Qt::MouseButtons m_lastWheelButtons = Qt::NoButton;
+    Qt::KeyboardModifiers m_lastWheelModifiers = Qt::NoModifier;
 };
 
 }  // namespace yozora

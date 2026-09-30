@@ -69,6 +69,12 @@ BrowserTab::BrowserTab(QWebEngineProfile* profile, Settings* settings, QWidget* 
     connect(m_startPage, &NewTabPage::searchRequested, this,
             [this](const QString& query) { loadInput(query, false); });
 
+    if (m_settings) {
+        m_view->setScrollMode(m_settings->scrollMode());
+        connect(m_settings, &Settings::scrollModeChanged, this,
+                [this] { m_view->setScrollMode(m_settings->scrollMode()); });
+    }
+
     updateSearchEngineUi();
     m_lastUrl = startPageUrl();
     m_lastTitle = tr("New Tab");

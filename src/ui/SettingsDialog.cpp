@@ -86,7 +86,9 @@ SettingsDialog::SettingsDialog(Settings* settings, WebProfile* profile, QWidget*
     connect(m_restoreSession, &QCheckBox::toggled, this, &SettingsDialog::applyToSettings);
     connect(m_darkTheme, &QRadioButton::toggled, this, &SettingsDialog::applyToSettings);
     connect(m_lightTheme, &QRadioButton::toggled, this, &SettingsDialog::applyToSettings);
-    connect(m_smoothScrolling, &QCheckBox::toggled, this, &SettingsDialog::applyToSettings);
+    connect(m_scrollMode, &QComboBox::currentIndexChanged, this, [this](int) {
+        applyToSettings();
+    });
 
     connect(m_blockThirdPartyCookies, &QCheckBox::toggled, this, &SettingsDialog::applyToSettings);
     connect(m_keepCookies, &QCheckBox::toggled, this, &SettingsDialog::applyToSettings);
@@ -281,10 +283,17 @@ QWidget* SettingsDialog::buildAppearanceSection()
 
     auto* scrollBox = new QGroupBox(tr("Scrolling"), page);
     auto* scrollLayout = new QVBoxLayout(scrollBox);
-    m_smoothScrolling = new QCheckBox(tr("Smooth scrolling (animated)"), scrollBox);
-    scrollLayout->addWidget(m_smoothScrolling);
-    scrollLayout->addWidget(hint(tr("Off: the page follows the wheel instantly, which feels "
-                                    "faster and sharper. On: every step is animated."),
+    m_scrollMode = new QComboBox(scrollBox);
+    m_scrollMode->addItem(tr("Fast (recommended)"),
+                          static_cast<int>(Settings::ScrollMode::Fast));
+    m_scrollMode->addItem(tr("Instant"), static_cast<int>(Settings::ScrollMode::Instant));
+    m_scrollMode->addItem(tr("Smooth (engine)"),
+                          static_cast<int>(Settings::ScrollMode::Smooth));
+    scrollLayout->addWidget(m_scrollMode);
+    scrollLayout->addWidget(hint(tr("\"Fast\" animates the wheel briefly: smooth and quick, "
+                                    "without the engine's slow easing.\n\"Instant\" jumps "
+                                    "straight to the new position.\n\"Smooth\" uses the "
+                                    "engine's own animation."),
                                  scrollBox));
     layout->addWidget(scrollBox);
 
@@ -407,7 +416,8 @@ void SettingsDialog::loadFromSettings()
         m_darkTheme->setChecked(dark);
         m_lightTheme->setChecked(!dark);
 
-        m_smoothScrolling->setChecked(m_settings->smoothScrolling());
+        m_scrollMode->setCurrentIndex(
+            m_scrollMode->findData(static_cast<int>(m_settings->scrollMode())));
     }
 
     if (m_profile) {
@@ -430,7 +440,7 @@ void SettingsDialog::applyToSettings()
     m_settings->setRestoreSessionOnStart(m_restoreSession->isChecked());
     m_settings->setThemeMode(m_darkTheme->isChecked() ? Settings::ThemeMode::Dark
                                                        : Settings::ThemeMode::Light);
-    m_settings->setSmoothScrolling(m_smoothScrolling->isChecked());
+    m_settings->setScrollMode(static_cast<Settings::ScrollMode>(m_scrollMode->currentData().toInt()));
 
     m_settings->setBlockThirdPartyCookies(m_blockThirdPartyCookies->isChecked());
     m_settings->setKeepCookiesOnExit(m_keepCookies->isChecked());

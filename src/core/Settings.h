@@ -53,11 +53,16 @@ public:
     [[nodiscard]] ThemeMode themeMode() const;
     void setThemeMode(ThemeMode mode);
 
-    // When false (the default) the engine scrolls instantly, which feels
-    // sharp and fast, like Chrome with smooth scrolling turned off. When true
-    // the engine animates every scroll step.
-    [[nodiscard]] bool smoothScrolling() const;
-    void setSmoothScrolling(bool smooth);
+    // How the mouse wheel scrolls a page.
+    //   Instant - the engine jumps straight to the new position.
+    //   Fast    - Yozora animates the wheel with a short, snappy curve
+    //             (default): smooth, but nowhere near the engine's slow curve.
+    //   Smooth  - the engine's own animated scrolling.
+    enum class ScrollMode { Instant, Fast, Smooth };
+    Q_ENUM(ScrollMode)
+
+    [[nodiscard]] ScrollMode scrollMode() const;
+    void setScrollMode(ScrollMode mode);
 
     [[nodiscard]] QByteArray windowGeometry() const;
     void setWindowGeometry(const QByteArray& geometry);
@@ -113,7 +118,7 @@ signals:
     void homePageChanged();
     void downloadDirectoryChanged();
     void themeModeChanged();
-    void smoothScrollingChanged();
+    void scrollModeChanged();
     void cookiePolicyChanged();
     void trackerBlockingChanged();
     void doNotTrackChanged();

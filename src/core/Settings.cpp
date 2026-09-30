@@ -25,7 +25,7 @@ constexpr auto kKeyHomePage = "browser/home_page";
 constexpr auto kKeyDownloadDir = "downloads/directory";
 constexpr auto kKeyAskWhereToSave = "downloads/ask_where_to_save";
 constexpr auto kKeyThemeMode = "appearance/theme_mode";
-constexpr auto kKeySmoothScrolling = "appearance/smooth_scrolling";
+constexpr auto kKeyScrollMode = "appearance/scroll_mode";
 constexpr auto kKeyWindowGeometry = "window/geometry";
 constexpr auto kKeyWindowState = "window/state";
 constexpr auto kKeyRestoreSession = "session/restore_on_start";
@@ -200,18 +200,24 @@ void Settings::setWindowGeometry(const QByteArray& geometry)
     d->store.setValue(QLatin1String(kKeyWindowGeometry), geometry);
 }
 
-bool Settings::smoothScrolling() const
+Settings::ScrollMode Settings::scrollMode() const
 {
-    return d->store.value(QLatin1String(kKeySmoothScrolling), false).toBool();
+    const int raw = d->store.value(QLatin1String(kKeyScrollMode),
+                                   static_cast<int>(ScrollMode::Fast))
+                        .toInt();
+    if (raw < 0 || raw > 2) {
+        return ScrollMode::Fast;
+    }
+    return static_cast<ScrollMode>(raw);
 }
 
-void Settings::setSmoothScrolling(bool smooth)
+void Settings::setScrollMode(ScrollMode mode)
 {
-    if (smoothScrolling() == smooth) {
+    if (scrollMode() == mode) {
         return;
     }
-    d->store.setValue(QLatin1String(kKeySmoothScrolling), smooth);
-    emit smoothScrollingChanged();
+    d->store.setValue(QLatin1String(kKeyScrollMode), static_cast<int>(mode));
+    emit scrollModeChanged();
 }
 
 QByteArray Settings::windowState() const
@@ -354,7 +360,7 @@ void Settings::resetToDefaults()
     emit homePageChanged();
     emit downloadDirectoryChanged();
     emit themeModeChanged();
-    emit smoothScrollingChanged();
+    emit scrollModeChanged();
     emit cookiePolicyChanged();
     emit trackerBlockingChanged();
     emit doNotTrackChanged();

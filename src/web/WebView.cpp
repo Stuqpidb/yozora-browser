@@ -16,11 +16,15 @@
 #include <QNetworkReply>
 #include <QNetworkRequest>
 #include <QStandardPaths>
+#include <QTimer>
 #include <QUrl>
+#include <QWheelEvent>
 #include <QWebEngineContextMenuRequest>
 #include <QWebEngineHistory>
 #include <QWebEngineProfile>
 #include <QWebEngineSettings>
+
+#include <cmath>
 
 namespace yozora {
 
@@ -33,6 +37,12 @@ WebView::WebView(QWebEngineProfile* profile, QWidget* parent)
 
     settings()->setAttribute(QWebEngineSettings::ShowScrollBars, true);
     settings()->setAttribute(QWebEngineSettings::FullScreenSupportEnabled, true);
+
+    // Drives the custom "Fast" wheel animation. ~60 Hz keeps it smooth without
+    // flooding the renderer.
+    m_smoothTimer = new QTimer(this);
+    m_smoothTimer->setInterval(15);
+    connect(m_smoothTimer, &QTimer::timeout, this, &WebView::stepSmoothScroll);
 }
 
 WebView::~WebView() = default;
@@ -52,6 +62,91 @@ void WebView::setDarkMode(bool dark)
         viewPalette.setColor(QPalette::WindowText, QColor(0x1a, 0x1f, 0x2b));
     }
     setPalette(viewPalette);
+}
+
+void WebView::setScrollMode(Settings::ScrollMode mode)
+{
+    m_scrollMode = mode;
+    if (m_scrollMode != Settings::ScrollMode::Fast) {
+        m_pendingScroll = QPointF();
+        if (m_smoothTimer) {
+            m_smoothTimer->stop();
+        }
+    }
+}
+
+void WebView::wheelEvent(QWheelEvent* event)
+{
+    // Only the custom "Fast" mode is handled here. Instant and Smooth are left
+    // entirely to the engine.
+    if (m_scrollMode != Settings::ScrollMode::Fast) {
+        QWebEngineView::wheelEvent(event);
+        return;
+    }
+
+    // High-resolution devices (trackpads, precision wheels) already deliver
+    // pixel deltas that feel smooth; leave them alone.
+    if (!event->pixelDelta().isNull()) {
+        QWebEngineView::wheelEvent(event);
+        return;
+    }
+
+    // Never interfere with modifier shortcuts such as Ctrl+wheel zoom.
+    if (event->modifiers() != Qt::NoModifier || event->angleDelta().isNull()) {
+        QWebEngineView::wheelEvent(event);
+        return;
+    }
+
+    // A notch is 120 eighths of a degree; map it to a comfortable pixel step.
+    constexpr qreal kPixelsPerNotch = 105.0;
+    const QPoint angle = event->angleDelta();
+    m_pendingScroll += QPointF(angle.x() / 120.0 * kPixelsPerNotch,
+                               angle.y() / 120.0 * kPixelsPerNotch);
+    m_lastWheelPos = event->position();
+    m_lastWheelButtons = event->buttons();
+    m_lastWheelModifiers = event->modifiers();
+    event->accept();
+
+    if (!m_smoothTimer->isActive()) {
+        m_smoothTimer->start();
+    }
+}
+
+void WebView::stepSmoothScroll()
+{
+    if (m_pendingScroll.isNull()) {
+        m_pendingScroll = QPointF();
+        m_smoothTimer->stop();
+        return;
+    }
+
+    // Exponential ease-out: every frame covers a fixed share of what is left,
+    // so the motion starts quickly and settles instead of stopping dead.
+    QPointF step = m_pendingScroll * 0.38;
+    if (std::abs(step.x()) < 1.0 && m_pendingScroll.x() != 0.0) {
+        step.setX(m_pendingScroll.x());
+    }
+    if (std::abs(step.y()) < 1.0 && m_pendingScroll.y() != 0.0) {
+        step.setY(m_pendingScroll.y());
+    }
+
+    const QPoint pixels(static_cast<int>(std::lround(step.x())),
+                        static_cast<int>(std::lround(step.y())));
+    m_pendingScroll -= QPointF(pixels.x(), pixels.y());
+
+    if (pixels.isNull()) {
+        m_pendingScroll = QPointF();
+        m_smoothTimer->stop();
+        return;
+    }
+
+    // Re-emitting the wheel with a pixel delta produces a short, controlled
+    // scroll without touching the page: the engine only ever sees ordinary
+    // wheel input.
+    QWheelEvent synthetic(m_lastWheelPos, mapToGlobal(m_lastWheelPos.toPoint()),
+                          pixels, QPoint(), m_lastWheelButtons, m_lastWheelModifiers,
+                          Qt::NoScrollPhase, false);
+    QWebEngineView::wheelEvent(&synthetic);
 }
 
 void WebView::contextMenuEvent(QContextMenuEvent* event)

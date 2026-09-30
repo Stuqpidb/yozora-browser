@@ -51,12 +51,14 @@ WebProfile::WebProfile(Settings* settings, bool ephemeral, QObject* parent)
     if (m_settings) {
         connect(m_settings, &Settings::cookiePolicyChanged, this,
                 &WebProfile::applyPrivacySettings);
-        // Scrolling feel: instant by default (sharp and fast), animated when the
-        // user asks for smooth scrolling.
-        connect(m_settings, &Settings::smoothScrollingChanged, this, [this] {
+        // Scrolling feel: only the "Smooth" mode uses the engine's own
+        // animation. The default "Fast" mode animates the wheel in the view
+        // itself, so the engine animator stays off to avoid double motion.
+        connect(m_settings, &Settings::scrollModeChanged, this, [this] {
             if (m_profile && m_settings) {
-                m_profile->settings()->setAttribute(QWebEngineSettings::ScrollAnimatorEnabled,
-                                                    m_settings->smoothScrolling());
+                m_profile->settings()->setAttribute(
+                    QWebEngineSettings::ScrollAnimatorEnabled,
+                    m_settings->scrollMode() == Settings::ScrollMode::Smooth);
             }
         });
     }
@@ -82,11 +84,11 @@ void WebProfile::configureProfile()
     settings->setAttribute(QWebEngineSettings::JavascriptCanOpenWindows, true);
     settings->setAttribute(QWebEngineSettings::JavascriptCanAccessClipboard, true);
     settings->setAttribute(QWebEngineSettings::JavascriptCanPaste, true);
-    // Instant scrolling by default: it reads as fast and direct, closer to the
-    // native Windows feel, instead of the slow eased animation. The user can
-    // turn smooth scrolling back on in Settings > Appearance.
-    settings->setAttribute(QWebEngineSettings::ScrollAnimatorEnabled,
-                           m_settings ? m_settings->smoothScrolling() : false);
+    // The engine animator is only used in the "Smooth" scroll mode; the default
+    // "Fast" mode is animated by WebView::wheelEvent() instead.
+    settings->setAttribute(
+        QWebEngineSettings::ScrollAnimatorEnabled,
+        m_settings && m_settings->scrollMode() == Settings::ScrollMode::Smooth);
 
     // Yozora renders its own error page instead of Chromium's.
     settings->setAttribute(QWebEngineSettings::ErrorPageEnabled, false);
