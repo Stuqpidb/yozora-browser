@@ -337,6 +337,62 @@ QGroupBox::title {
 }
 QLabel#hintLabel { color: %TEXT_MUTED%; }
 
+/* ---- History / bookmarks window --------------------------------------- */
+/* Three bands: a header with the title, the count and the filter box, the list
+   itself, and a footer with the destructive action and Close. The bands are
+   separated by hairlines rather than by boxes, so the window reads as one
+   surface instead of three stacked widgets. */
+QWidget#libraryHeader { background: %SURFACE%; border-bottom: 1px solid %BORDER%; }
+QWidget#libraryFooter { background: %SURFACE%; border-top: 1px solid %BORDER%; }
+QLabel#dialogTitle {
+    color: %TEXT%;
+    font-family: "%DISPLAY_FONT%";
+    font-size: 17px;
+    font-weight: 600;
+}
+QLabel#dialogSubtitle { color: %TEXT_MUTED%; font-size: 12px; }
+
+QLineEdit#searchBox {
+    background: %FIELD%;
+    border: 1px solid %BORDER%;
+    border-radius: 12px;
+    padding: 8px 12px;
+    color: %TEXT%;
+}
+QLineEdit#searchBox:focus { border-color: %ACCENT%; }
+
+QListWidget#libraryList {
+    background: transparent;
+    border: none;
+    padding: 6px 8px;
+    outline: none;
+}
+/* The row widget fills the item, so the selection has to be drawn by the item
+   itself: a stylesheet background on the widget would sit under the labels. */
+QListWidget#libraryList::item { border-radius: 12px; }
+QListWidget#libraryList::item:selected { background: %SURFACE_HOVER%; }
+QListWidget#libraryList::item:hover { background: %SURFACE_HOVER%; }
+QListWidget#libraryList::item:selected:hover { background: %SURFACE_ACTIVE%; }
+
+QLabel#rowTitle { color: %TEXT%; font-size: 13px; background: transparent; }
+QLabel#rowSubtle { color: %TEXT_MUTED%; font-size: 11px; background: transparent; }
+QLabel#rowTime { color: %TEXT_MUTED%; font-size: 11px; background: transparent; }
+
+/* A button that looks like text until it is hovered: the only action in the
+   footer that destroys something, and it should not compete with Close. */
+QPushButton#quietButton {
+    background: transparent;
+    border: 1px solid transparent;
+    color: %TEXT_MUTED%;
+    padding: 6px 12px;
+}
+QPushButton#quietButton:hover {
+    background: %SURFACE_HOVER%;
+    border-color: %BORDER%;
+    color: %DANGER%;
+}
+QPushButton#quietButton:disabled { color: %TEXT_MUTED%; background: transparent; }
+
 /* ---- Menu ------------------------------------------------------------ */
 QMenu {
     background: %SURFACE%;
@@ -448,6 +504,43 @@ QListWidget#settingsNav::item {
 }
 QListWidget#settingsNav::item:hover { background: %SURFACE_HOVER%; color: %TEXT%; }
 QListWidget#settingsNav::item:selected { background: %SURFACE_ACTIVE%; color: %TEXT%; }
+
+/* ---- Settings pages --------------------------------------------------- */
+/* Each section is a header band plus a scrolling body. The cards inside are the
+   QGroupBoxes built by SettingsDialog. */
+QScrollArea#settingsScroll { background: transparent; border: none; }
+QScrollArea#settingsScroll > QWidget > QWidget { background: transparent; }
+
+QGroupBox#settingsCard {
+    background: %CARD%;
+    border: 1px solid %CARD_BORDER%;
+    border-radius: 16px;
+    margin-top: 0;
+    padding: 0;
+}
+QLabel#cardHeading { color: %TEXT%; font-weight: 600; }
+QLabel#cardNote { color: %TEXT_MUTED%; font-size: 12px; }
+
+/* A card's own title, the way QGroupBox draws one by default, has to be pulled
+   back to match the rest of the interface. */
+/* The cards are untitled: the band above them carries the section name, so a
+   second title inside each card would repeat it one level down. */
+QGroupBox {
+    background: %CARD%;
+    border: 1px solid %CARD_BORDER%;
+    border-radius: 16px;
+    margin-top: 0;
+    padding: 20px 20px 20px 20px;
+}
+QGroupBox::title {
+    subcontrol-origin: margin;
+    subcontrol-position: top left;
+    left: 16px;
+    padding: 0 8px 0 0;
+    color: %TEXT%;
+    font-weight: 600;
+}
+QCheckBox, QRadioButton { padding: 3px 0; }
 )")
         .replace(QStringLiteral("%TEXT%"), c.text)
         .replace(QStringLiteral("%TEXT_MUTED%"), c.textMuted)

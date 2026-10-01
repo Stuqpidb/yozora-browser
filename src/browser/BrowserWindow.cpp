@@ -13,6 +13,7 @@
 #include "privacy/PermissionManager.h"
 #include "ui/AddressBar.h"
 #include "ui/ClearBrowsingDataDialog.h"
+#include "ui/LibraryDialog.h"
 #include "ui/NavigationBar.h"
 #include "ui/SettingsDialog.h"
 #include "ui/SideBar.h"
@@ -140,6 +141,15 @@ void BrowserWindow::buildUi()
     });
     connect(m_sideBar, &SideBar::privateRequested, this, &BrowserWindow::openPrivateWindow);
     connect(m_sideBar, &SideBar::settingsRequested, this, &BrowserWindow::showSettings);
+    // A rail the user hid stays hidden, and a rail they brought back stays
+    // visible, for the rest of the session and the next start.
+    connect(m_sideBar, &SideBar::collapsedChanged, this, [this](bool collapsed) {
+        m_settings->setSideBarCollapsed(collapsed);
+        update();
+    });
+    if (m_settings->sideBarCollapsed()) {
+        m_sideBar->setCollapsed(true, false);
+    }
 
     connect(m_tabStrip, &TabStrip::currentChanged, this, &BrowserWindow::selectTab);
     connect(m_tabStrip, &TabStrip::closeRequested, this, &BrowserWindow::closeTab);
@@ -216,6 +226,10 @@ void BrowserWindow::buildShortcuts()
     });
 
     add(sequence("Ctrl+L"), [this] { focusAddressBar(); });
+    // Ctrl+B hides the rail, the way every other browser does it. When the rail
+    // is hidden there is nothing on screen to click, so the shortcut is also the
+    // only way back.
+    add(sequence("Ctrl+B"), [this] { m_sideBar->setCollapsed(!m_sideBar->isCollapsed()); });
     add(sequence("Ctrl+D"), [this] { toggleBookmark(); });
     add(sequence("Ctrl+Shift+H"), [this] {
         if (auto* tab = currentTab()) {
@@ -588,41 +602,14 @@ void BrowserWindow::updateBookmarkStar()
 
 void BrowserWindow::showLibrary(bool bookmarks)
 {
-    QDialog dialog(this);
-    dialog.setWindowTitle(bookmarks ? tr("Bookmarks") : tr("History"));
-    dialog.resize(560, 520);
+    LibraryDialog dialog(bookmarks, m_bookmarks, m_history, this);
+    dialog.exec();
 
-    auto* layout = new QVBoxLayout(&dialog);
-    auto* list = new QListWidget(&dialog);
-    layout->addWidget(list);
-
-    if (bookmarks) {
-        const QList<Bookmark> items = m_bookmarks ? m_bookmarks->all() : QList<Bookmark>{};
-        for (const Bookmark& bookmark : items) {
-            auto* item = new QListWidgetItem(
-                QStringLiteral("%1\n%2").arg(bookmark.title, bookmark.url), list);
-            item->setData(Qt::UserRole, bookmark.url);
-        }
-    } else {
-        const QList<HistoryEntry> items = m_history ? m_history->recent(300) : QList<HistoryEntry>{};
-        for (const HistoryEntry& entry : items) {
-            auto* item = new QListWidgetItem(
-                QStringLiteral("%1\n%2").arg(entry.title, entry.url), list);
-            item->setData(Qt::UserRole, entry.url);
+    if (auto* tab = currentTab()) {
+        if (const QUrl url = dialog.chosenUrl(); url.isValid()) {
+            tab->loadUrl(url);
         }
     }
-
-    connect(list, &QListWidget::itemActivated, this, [this, &dialog](QListWidgetItem* item) {
-        const QUrl url(item->data(Qt::UserRole).toString());
-        if (url.isValid()) {
-            if (auto* tab = currentTab()) {
-                tab->loadUrl(url);
-            }
-            dialog.accept();
-        }
-    });
-
-    dialog.exec();
 }
 
 void BrowserWindow::showStatusMessage(const QString& message)

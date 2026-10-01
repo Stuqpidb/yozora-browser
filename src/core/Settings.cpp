@@ -25,6 +25,7 @@ constexpr auto kKeyAskWhereToSave = "downloads/ask_where_to_save";
 constexpr auto kKeyScrollMode = "appearance/scroll_mode";
 constexpr auto kKeyWindowGeometry = "window/geometry";
 constexpr auto kKeyWindowState = "window/state";
+constexpr auto kKeySideBarCollapsed = "window/sidebar_collapsed";
 constexpr auto kKeyRestoreSession = "session/restore_on_start";
 
 constexpr auto kKeyBlockThirdPartyCookies = "privacy/block_third_party_cookies";
@@ -202,6 +203,16 @@ QByteArray Settings::windowState() const
 void Settings::setWindowState(const QByteArray& state)
 {
     d->store.setValue(QLatin1String(kKeyWindowState), state);
+}
+
+bool Settings::sideBarCollapsed() const
+{
+    return d->store.value(QLatin1String(kKeySideBarCollapsed), false).toBool();
+}
+
+void Settings::setSideBarCollapsed(bool collapsed)
+{
+    d->store.setValue(QLatin1String(kKeySideBarCollapsed), collapsed);
 }
 
 bool Settings::restoreSessionOnStart() const

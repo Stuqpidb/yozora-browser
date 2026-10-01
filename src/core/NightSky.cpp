@@ -26,8 +26,6 @@ const QColor kNebulaRose(0xc0, 0x53, 0x8f);
 const QColor kStarWarm(0xff, 0xf0, 0xd4);
 const QColor kStarCool(0xd8, 0xe6, 0xff);
 const QColor kMilkyGlow(0xc8, 0xd4, 0xff);
-const QColor kMoonLit(0xfd, 0xfd, 0xff);
-const QColor kMoonShade(0xa8, 0xb4, 0xd2);
 
 // A soft blob of colour. Radial gradients are the only cheap way to get a
 // nebula that has no visible edge.
@@ -148,102 +146,6 @@ void milkyWay(QPainter& painter, const QSize& size, QRandomGenerator& random)
     painter.restore();
 }
 
-// A crater: a shallow disc with a bright rim on the lit side. Flattening the
-// ellipse towards the moon's edge keeps them from looking like polka dots.
-void crater(QPainter& painter, const QPointF& at, qreal radius, const QPointF& lightFrom,
-            qreal strength)
-{
-    QRadialGradient bowl(at + (lightFrom - at) * 0.35, radius * 1.15);
-    bowl.setColorAt(0.0, QColor(kMoonShade.red(), kMoonShade.green(), kMoonShade.blue(),
-                                static_cast<int>(70 * strength)));
-    bowl.setColorAt(0.7, QColor(0x8a, 0x97, 0xb8, static_cast<int>(40 * strength)));
-    bowl.setColorAt(1.0, QColor(0xff, 0xff, 0xff, 0));
-    painter.setPen(Qt::NoPen);
-    painter.setBrush(bowl);
-    painter.drawEllipse(at, radius, radius * 0.92);
-
-    // The sunlit wall of the crater.
-    QColor rim(255, 255, 255, static_cast<int>(96 * strength));
-    painter.setBrush(Qt::NoBrush);
-    painter.setPen(QPen(rim, qMax(0.8, radius * 0.10)));
-    const QPointF centre = at - (lightFrom - at) * 0.10;
-    painter.drawArc(QRectF(centre.x() - radius, centre.y() - radius * 0.92,
-                           radius * 2, radius * 1.84),
-                   static_cast<int>(qRadiansToDegrees(std::atan2(lightFrom.y() - at.y(),
-                                                                lightFrom.x() - at.x())) - 60),
-                   120);
-}
-
-// The moon: a limb-darkened disc, a crater field that follows the curvature, a
-// bright limb on the sunward side and three layers of halo. This is the one
-// piece of the page the eye goes to, so it is built from parts rather than drawn
-// as a circle.
-void moon(QPainter& painter, const QSize& size)
-{
-    const qreal w = size.width();
-    const qreal h = size.height();
-    const QPointF centre(w * 0.815, h * 0.155);
-    const qreal radius = qBound(38.0, qMin(w, h) * 0.082, 84.0);
-    const QPointF lightFrom(centre.x() - radius * 1.6, centre.y() - radius * 1.4);
-
-    // Halo, widest and faintest first.
-    glow(painter, centre, radius * 9.0, QColor(0x7f, 0x9c, 0xff), 0.10);
-    glow(painter, centre, radius * 4.2, QColor(0x9f, 0xb6, 0xff), 0.16);
-    glow(painter, centre, radius * 1.9, QColor(0xcf, 0xdc, 0xff), 0.24);
-
-    // The disc, lit from the upper left. The gradient has to stay narrower than
-    // the disc, otherwise the whole visible moon sits on the dark end of the
-    // limb-darkening ramp and reads as a grey smudge instead of a sphere.
-    const QPointF focus = centre + (lightFrom - centre) * 0.20;
-    QRadialGradient disc(focus, radius * 1.45);
-    disc.setColorAt(0.00, kMoonLit);
-    disc.setColorAt(0.40, QColor(0xf4, 0xf7, 0xff));
-    disc.setColorAt(0.72, QColor(0xda, 0xe1, 0xf2));
-    disc.setColorAt(1.00, QColor(0x9f, 0xab, 0xcd));
-    painter.setPen(Qt::NoPen);
-    painter.setBrush(disc);
-    painter.drawEllipse(centre, radius, radius);
-
-    // Maria: the large dark plains, before the craters on top of them.
-    QRandomGenerator craters(0x4D00);
-    for (int i = 0; i < 5; ++i) {
-        const qreal a = craters.bounded(360) * M_PI / 180.0;
-        const qreal d = craters.bounded(static_cast<quint32>(radius * 0.62));
-        crater(painter, centre + QPointF(std::cos(a) * d, std::sin(a) * d * 0.9),
-               radius * (0.16 + craters.bounded(16) / 100.0), lightFrom, 0.55);
-    }
-
-    // Craters. Sizes fall off with distance from the centre so the field looks
-    // wrapped around the sphere instead of pasted onto a disc.
-    for (int i = 0; i < 26; ++i) {
-        const qreal a = craters.bounded(360) * M_PI / 180.0;
-        const qreal d = std::sqrt(craters.bounded(1000) / 1000.0) * radius * 0.90;
-        const qreal squash = std::sqrt(std::max(0.0, 1.0 - (d / radius) * (d / radius)));
-        const qreal craterSize =
-            radius * (0.035 + craters.bounded(70) / 1000.0) * (0.45 + 0.55 * squash);
-        crater(painter, centre + QPointF(std::cos(a) * d, std::sin(a) * d * squash),
-               craterSize, lightFrom, 0.55 + 0.45 * squash);
-    }
-
-    // Terminator: a soft darkening along the far edge, then a bright rim on the
-    // lit side, which is what sells the sphere.
-    QRadialGradient limb(centre, radius);
-    limb.setColorAt(0.00, QColor(0x0a, 0x0e, 0x20, 0));
-    limb.setColorAt(0.86, QColor(0x0a, 0x0e, 0x20, 0));
-    limb.setColorAt(1.00, QColor(0x0a, 0x0e, 0x20, 96));
-    painter.setPen(Qt::NoPen);
-    painter.setBrush(limb);
-    painter.drawEllipse(centre, radius, radius);
-
-    QColor rim(255, 255, 255, 150);
-    painter.setBrush(Qt::NoBrush);
-    painter.setPen(QPen(rim, 1.4));
-    painter.drawArc(QRectF(centre.x() - radius, centre.y() - radius, radius * 2, radius * 2),
-                    static_cast<int>(qRadiansToDegrees(std::atan2(lightFrom.y() - centre.y(),
-                                                                 lightFrom.x() - centre.x())) - 46),
-                    92);
-}
-
 void render(QPixmap* target, const QSize& size, qreal dpr)
 {
     // QPixmap has no resize(): a default-constructed one is null, and a QPainter
@@ -292,11 +194,16 @@ void render(QPixmap* target, const QSize& size, qreal dpr)
     }
 
     // A handful of brighter stars behind the band, so the field has structure
-    // before the fine dust goes on.
+    // before the fine dust goes on. These sit in the corners: a bright glow in
+    // the middle of the page would compete with the search field.
     for (int i = 0; i < 9; ++i) {
-        glow(painter, QPointF(w * (nebula.bounded(1000) / 1000.0),
-                              h * (nebula.bounded(1000) / 1000.0)),
-             qMax(w, h) * 0.16, kNebulaBlue, 0.05);
+        // Alternate between the far corners, biased away from the centre band
+        // the wordmark and the search field sit in.
+        const bool right = (i % 2) == 0;
+        const qreal x = w * (right ? 0.80 + nebula.bounded(180) / 1000.0
+                                   : 0.02 + nebula.bounded(180) / 1000.0);
+        const qreal y = h * (nebula.bounded(1000) / 1000.0);
+        glow(painter, QPointF(x, y), qMax(w, h) * 0.16, kNebulaBlue, 0.05);
     }
 
     milkyWay(painter, size, nebula);
@@ -328,8 +235,6 @@ void render(QPixmap* target, const QSize& size, qreal dpr)
         const QColor tone = random.bounded(100) < 40 ? kStarWarm : kStarCool;
         star(painter, QPointF(x, y), 1.5, 1.0, tone, true);
     }
-
-    moon(painter, size);
 
     // Vignette: the corners fall away so the search field sits in the brightest
     // part of the picture.

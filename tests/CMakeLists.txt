@@ -9,6 +9,7 @@ set(YOZORA_TESTS
     tst_tabwidget
     tst_errorpage
     tst_glass
+    tst_library
     tst_nightsky
 )
 

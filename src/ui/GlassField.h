@@ -9,6 +9,7 @@
 class QLineEdit;
 class QMouseEvent;
 class QPainter;
+class QVariantAnimation;
 
 namespace yozora {
 
@@ -71,6 +72,7 @@ protected:
 
 private:
     void layoutEditor();
+    void syncAnimations();
     [[nodiscard]] qreal iconSize() const;
     [[nodiscard]] QRectF trailingBox() const;
     // The pill itself: the widget rect minus the shadow margin.
@@ -79,9 +81,11 @@ private:
                   const QColor& color) const;
 
     QLineEdit* m_editor = nullptr;
+    QVariantAnimation* m_focusAnimation = nullptr;
     Trailing m_trailing = Trailing::Arrow;
     qreal m_radius = 19.0;
     qreal m_margin = 0.0;
+    qreal m_focus = 0.0;  // animated 0..1 strength of the focus ring
     bool m_hero = false;
 };
 

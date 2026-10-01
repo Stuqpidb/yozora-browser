@@ -18,7 +18,10 @@ through Qt WebEngine.
 - Tabs: create, close, reorder, restore last closed (`Ctrl+Shift+T`)
 - Navigation: back, forward, reload, stop, with buttons that disable themselves
 - Address bar: URL or search query, `Ctrl+L` to focus
+- A left rail that can be hidden (`Ctrl+B`) and stays that way across restarts
 - Yozora start page: search over a generated night sky, with pinned sites
+- History (`Ctrl+H`) and bookmarks (`Ctrl+Shift+O`) as searchable lists, with
+  relative times and per-entry removal
 - Page context menu: open link, copy link, save image, clipboard actions
 - DevTools in a separate window (`F12`)
 - Downloads to a configurable folder, with progress and "open" / "show folder"

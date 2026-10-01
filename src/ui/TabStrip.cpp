@@ -9,6 +9,7 @@
 #include <QLinearGradient>
 #include <QMouseEvent>
 #include <QPainter>
+#include <QTimer>
 #include <QWheelEvent>
 
 namespace yozora {
@@ -39,9 +40,83 @@ TabStrip::TabStrip(QWidget* parent)
     setFixedHeight(kHeight);
 }
 
+void TabStrip::HoverTrack::resize(int count)
+{
+    m_values.resize(count);
+}
+
+void TabStrip::HoverTrack::set(int index, qreal target)
+{
+    if (index < 0 || index >= m_values.size()) {
+        return;
+    }
+    m_values[index] = qBound(0.0, target, 1.0);
+}
+
+qreal TabStrip::HoverTrack::value(int index) const
+{
+    if (index < 0 || index >= m_values.size()) {
+        return 0.0;
+    }
+    return m_values.at(index);
+}
+
+void TabStrip::HoverTrack::advance(qreal step)
+{
+    for (qreal& value : m_values) {
+        if (qAbs(value) < step) {
+            value = 0.0;
+        } else if (value > 0.0) {
+            value -= step;
+        } else {
+            value += step;
+        }
+    }
+}
+
+bool TabStrip::HoverTrack::atRest() const
+{
+    for (qreal value : m_values) {
+        if (value != 0.0) {
+            return false;
+        }
+    }
+    return true;
+}
+
+void TabStrip::startHoverAnimation()
+{
+    // The highlight is stepped towards its target on a timer rather than driven
+    // by a QVariantAnimation: the targets change while it runs (the pointer
+    // moves to another tab), and a step function handles that without being
+    // restarted. 60Hz over 110ms is the same curve the rest of the interface
+    // uses, reached with the arithmetic spelled out.
+    if (m_hoverAnimating) {
+        return;
+    }
+    m_hoverAnimating = true;
+
+    auto* timer = new QTimer(this);
+    timer->setInterval(16);
+    connect(timer, &QTimer::timeout, this, [this, timer] {
+        m_hoverAmount.advance(1.0 / 6.6);  // 1.0 over ~110ms
+        if (m_hoverAmount.atRest()) {
+            m_hoverAnimating = false;
+            timer->stop();
+            timer->deleteLater();
+        }
+        update();
+    });
+    timer->start();
+}
+
 void TabStrip::setTabs(const QList<Tab>& tabs)
 {
     m_tabs = tabs;
+    m_hoverAmount.resize(tabs.size());
+    if (m_hover >= tabs.size()) {
+        m_hover = -1;
+    }
     update();
 }
 
@@ -145,7 +220,10 @@ void TabStrip::paintEvent(QPaintEvent*)
         }
         const QRect tab = tabRect(i);
         const bool selected = (i == m_current);
-        const bool hovered = (i == m_hover) && !m_dragging;
+        // Smoothed per tab: the pointer can move several tabs in one frame, and
+        // a per-tab fade is what stops the highlight from teleporting between
+        // them.
+        const qreal hover = qBound(0.0, m_hoverAmount.value(i), 1.0);
 
         // The active tab is a real glass surface: shadow, translucent body, top
         // highlight, hairline. Inactive tabs stay nearly invisible until the
@@ -154,12 +232,11 @@ void TabStrip::paintEvent(QPaintEvent*)
             Glass::paintShadow(painter, QRectF(tab), glass, 0.9);
             Glass::paintPanel(painter, QRectF(tab), glass, 1.0);
         } else {
-            if (hovered) {
-                Glass::paintChip(painter, QRectF(tab), glass, 1.0);
-            } else {
-                painter.setPen(Qt::NoPen);
-                painter.setBrush(QColor(c.tabInactive));
-                painter.drawRoundedRect(tab, 11, 11);
+            painter.setPen(Qt::NoPen);
+            painter.setBrush(QColor(c.tabInactive));
+            painter.drawRoundedRect(tab, 11, 11);
+            if (hover > 0.001) {
+                Glass::paintChip(painter, QRectF(tab), glass, hover);
             }
         }
 
@@ -199,9 +276,9 @@ void TabStrip::paintEvent(QPaintEvent*)
                          Qt::AlignVCenter | Qt::AlignLeft, title);
 
         // Close button.
-        if (selected || hovered) {
+        if (selected || hover > 0.01) {
             const QRect close = closeRect(i);
-            if (hovered && m_closeHover) {
+            if (hover > 0.5 && m_closeHover) {
                 painter.setPen(Qt::NoPen);
                 painter.setBrush(QColor(c.danger));
                 painter.drawRoundedRect(close, 6, 6);
@@ -275,6 +352,9 @@ void TabStrip::mouseMoveEvent(QMouseEvent* event)
     bool changed = false;
     if (index != m_hover) {
         m_hover = index;
+        // The tab the pointer left retracts, the one it arrived at fills.
+        m_hoverAmount.set(m_hover, 1.0);
+        startHoverAnimation();
         changed = true;
     }
     const bool closeHover = index >= 0 && closeRect(index).contains(pos);
@@ -322,6 +402,8 @@ void TabStrip::mouseReleaseEvent(QMouseEvent* event)
 void TabStrip::leaveEvent(QEvent*)
 {
     m_hover = -1;
+    m_hoverAmount.set(m_hover, 0.0);
+    startHoverAnimation();
     m_closeHover = false;
     m_plusHover = false;
     update();

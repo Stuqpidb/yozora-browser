@@ -64,6 +64,12 @@ public:
     [[nodiscard]] QByteArray windowState() const;
     void setWindowState(const QByteArray& state);
 
+    // Whether the left rail is hidden. Remembered across restarts, because a
+    // window that forgets how the user arranged it is a window they have to fix
+    // every morning.
+    [[nodiscard]] bool sideBarCollapsed() const;
+    void setSideBarCollapsed(bool collapsed);
+
     [[nodiscard]] bool restoreSessionOnStart() const;
     void setRestoreSessionOnStart(bool restore);
 

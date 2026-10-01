@@ -28,6 +28,13 @@ public:
 
     [[nodiscard]] QSize sizeHint() const override;
 
+    // The width the row is laid out in. Tiles are sized to divide it exactly,
+    // so the row starts and ends on the same vertical lines as whatever it is
+    // meant to line up with - the search field above it. Without this the row is
+    // only as wide as it happens to need, and a label wider than its tile
+    // pushes the optical centre to the left of the real one.
+    void setContentWidth(int width);
+
     void load();
     void save() const;
 
@@ -46,6 +53,7 @@ private:
 
     QGridLayout* m_grid = nullptr;
     QList<Site> m_sites;
+    int m_contentWidth = 0;
 };
 
 // The Yozora start page: a wordmark, a search field and the pinned sites, laid

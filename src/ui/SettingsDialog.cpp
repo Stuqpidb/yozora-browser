@@ -1,12 +1,14 @@
 // SPDX-License-Identifier: MIT
 #include "ui/SettingsDialog.h"
 
+#include "core/Animation.h"
 #include "core/SearchEngine.h"
 #include "core/Settings.h"
 #include "ui/ClearBrowsingDataDialog.h"
 #include "utils/Version.h"
 #include "web/WebProfile.h"
 
+#include <QAbstractAnimation>
 #include <QAbstractItemView>
 #include <QCheckBox>
 #include <QComboBox>
@@ -14,14 +16,17 @@
 #include <QFileDialog>
 #include <QFormLayout>
 #include <QFrame>
+#include <QGraphicsOpacityEffect>
 #include <QGroupBox>
 #include <QHBoxLayout>
 #include <QLabel>
 #include <QLineEdit>
 #include <QListWidget>
 #include <QPushButton>
+#include <QScrollArea>
+#include <QShowEvent>
 #include <QStackedWidget>
-#include <QTabWidget>
+#include <QVariantAnimation>
 #include <QVBoxLayout>
 
 namespace yozora {
@@ -47,6 +52,15 @@ QLabel* hint(const QString& text, QWidget* parent)
 
 }  // namespace
 
+// A section: its title, the sentence under it, and the page's own widgets.
+// Defined out of line here because the header only forward-declares it, and the
+// constructor needs the full type to build the list of them.
+struct SettingsDialog::Section {
+    QString title;
+    QString subtitle;
+    QWidget* page;
+};
+
 SettingsDialog::SettingsDialog(Settings* settings, WebProfile* profile, QWidget* parent)
     : QDialog(parent)
     , m_settings(settings)
@@ -62,7 +76,12 @@ SettingsDialog::SettingsDialog(Settings* settings, WebProfile* profile, QWidget*
     m_nav = new QListWidget(this);
     m_nav->setObjectName(QStringLiteral("settingsNav"));
     m_nav->setFixedWidth(210);
-    m_nav->setFocusPolicy(Qt::NoFocus);
+    // The section list has to be reachable from the keyboard. It used to be
+    // NoFocus, which meant the only way to change section was the mouse - and
+    // since the controls inside a page hold the focus, even Up/Down landed on a
+    // combo box instead of the list.
+    m_nav->setFocusPolicy(Qt::StrongFocus);
+    m_nav->setFocusProxy(nullptr);
     root->addWidget(m_nav);
 
     auto* right = new QWidget(this);
@@ -71,25 +90,28 @@ SettingsDialog::SettingsDialog(Settings* settings, WebProfile* profile, QWidget*
     rightLayout->setSpacing(0);
 
     auto* stack = new QStackedWidget(right);
-    struct Section {
-        QString title;
-        QWidget* page;
-    };
     const QList<Section> sections = {
-        {tr("Search"), buildSearchSection()},
-        {tr("Startup"), buildStartupSection()},
-        {tr("Downloads"), buildDownloadsSection()},
-        {tr("Privacy"), buildPrivacySection()},
-        {tr("Scrolling"), buildScrollingSection()},
-        {tr("Data"), buildDataSection()},
-        {tr("About"), buildAboutSection()},
+        {tr("Search"), tr("Which engine answers what you type in the address bar."),
+         buildSearchSection()},
+        {tr("Startup"), tr("What happens when the browser opens."), buildStartupSection()},
+        {tr("Downloads"), tr("Where files are saved."), buildDownloadsSection()},
+        {tr("Privacy"),
+         tr("The defaults here are the private ones. Everything that weakens privacy has to be "
+            "turned on on purpose."),
+         buildPrivacySection()},
+        {tr("Scrolling"), tr("How the mouse wheel moves a page."), buildScrollingSection()},
+        {tr("Data"), tr("What Yozora keeps on this machine."), buildDataSection()},
+        {tr("About"), tr("Version and licences."), buildAboutSection()},
     };
     for (const Section& section : sections) {
         m_nav->addItem(section.title);
-        stack->addWidget(section.page);
+        stack->addWidget(wrapSection(section, stack));
     }
-    connect(m_nav, &QListWidget::currentRowChanged, stack, &QStackedWidget::setCurrentIndex);
+    connect(m_nav, &QListWidget::currentRowChanged, this, [this, stack](int row) {
+        showSection(stack, row);
+    });
     m_nav->setCurrentRow(0);
+    m_pages = stack;
 
     rightLayout->addWidget(stack, 1);
 
@@ -131,17 +153,97 @@ SettingsDialog::SettingsDialog(Settings* settings, WebProfile* profile, QWidget*
     refreshPermissions();
 }
 
+void SettingsDialog::showEvent(QShowEvent* event)
+{
+    QDialog::showEvent(event);
+    // The section list takes the keyboard on open. Without this the first Up or
+    // Down the user presses goes to whatever control happens to hold the focus,
+    // which on the Search page is the engine combo box - so arrowing through the
+    // sections silently changed the search engine instead.
+    m_nav->setFocus(Qt::OtherFocusReason);
+}
+
+QWidget* SettingsDialog::wrapSection(const Section& section, QWidget* parent)
+{
+    auto* wrapper = new QWidget(parent);
+
+    auto* outer = new QVBoxLayout(wrapper);
+    outer->setContentsMargins(0, 0, 0, 0);
+    outer->setSpacing(0);
+
+    // The section's own name as a band across the top. The cards below it are
+    // deliberately unnamed: a heading per card on top of this one is two levels
+    // of title saying the same thing, which is what made the old layout look
+    // like a stack of boxes.
+    auto* header = new QWidget(wrapper);
+    header->setObjectName(QStringLiteral("sectionHeader"));
+    auto* headerLayout = new QVBoxLayout(header);
+    headerLayout->setContentsMargins(26, 18, 26, 14);
+    headerLayout->setSpacing(3);
+
+    auto* heading = new QLabel(section.title, header);
+    heading->setObjectName(QStringLiteral("dialogTitle"));
+    headerLayout->addWidget(heading);
+
+    auto* subtitle = new QLabel(section.subtitle, header);
+    subtitle->setObjectName(QStringLiteral("dialogSubtitle"));
+    subtitle->setWordWrap(true);
+    headerLayout->addWidget(subtitle);
+    outer->addWidget(header);
+
+    auto* scroll = new QScrollArea(wrapper);
+    scroll->setObjectName(QStringLiteral("settingsScroll"));
+    scroll->setFrameShape(QFrame::NoFrame);
+    scroll->setWidgetResizable(true);
+    scroll->setHorizontalScrollBarPolicy(Qt::ScrollBarAlwaysOff);
+    // The section's own margins are handled by its layout; the scroll area adds
+    // none, so the cards line up with the header above them.
+    scroll->setWidget(section.page);
+    outer->addWidget(scroll, 1);
+
+    return wrapper;
+}
+
+void SettingsDialog::showSection(QStackedWidget* stack, int row)
+{
+    if (row < 0 || row >= stack->count()) {
+        return;
+    }
+    QWidget* incoming = stack->widget(row);
+    if (stack->currentWidget() == incoming) {
+        return;
+    }
+
+    // The switch is instant. A cross-fade looked like nothing happened at all
+    // over a fraction of a second, and the fade machinery (a graphics effect on
+    // a widget the stack owns) was more fragile than the effect is worth: the
+    // section still read as the old one until the animation finished.
+    stack->setCurrentWidget(incoming);
+    // Any page that was mid-fade from an earlier rapid change keeps its effect
+    // otherwise, and a page left at opacity 0 is an invisible section.
+    for (int i = 0; i < stack->count(); ++i) {
+        if (QGraphicsOpacityEffect* effect =
+                qobject_cast<QGraphicsOpacityEffect*>(stack->widget(i)->graphicsEffect())) {
+            delete effect;  // setGraphicsEffect() transferred ownership to Qt
+        }
+    }
+}
+
 QWidget* SettingsDialog::buildSearchSection()
 {
     auto* page = new QWidget(this);
     auto* layout = new QVBoxLayout(page);
-    layout->setContentsMargins(22, 22, 22, 22);
+    layout->setContentsMargins(26, 20, 26, 24);
     layout->setSpacing(12);
 
-    auto* box = new QGroupBox(tr("Search engine"), page);
+    // Untitled on purpose: the section header above already says what this page is,
+    // and a second heading inside it would say the same thing one level down.
+    auto* box = new QGroupBox(page);
     auto* form = new QFormLayout(box);
     form->setLabelAlignment(Qt::AlignLeft);
     form->setFieldGrowthPolicy(QFormLayout::AllNonFixedFieldsGrow);
+    form->setHorizontalSpacing(20);
+    form->setVerticalSpacing(12);
 
     m_searchEngine = new QComboBox(box);
     for (const auto& engine : SearchEngines::builtin()) {
@@ -173,12 +275,16 @@ QWidget* SettingsDialog::buildStartupSection()
 {
     auto* page = new QWidget(this);
     auto* layout = new QVBoxLayout(page);
-    layout->setContentsMargins(22, 22, 22, 22);
+    layout->setContentsMargins(26, 20, 26, 24);
     layout->setSpacing(12);
 
-    auto* box = new QGroupBox(tr("New tab"), page);
+    // Untitled on purpose: the section header above already says what this page is,
+    // and a second heading inside it would say the same thing one level down.
+    auto* box = new QGroupBox(page);
     auto* form = new QFormLayout(box);
     form->setFieldGrowthPolicy(QFormLayout::AllNonFixedFieldsGrow);
+    form->setHorizontalSpacing(20);
+    form->setVerticalSpacing(12);
 
     m_homePage = new QLineEdit(box);
     m_homePage->setPlaceholderText(QStringLiteral("about:yozora"));
@@ -198,12 +304,16 @@ QWidget* SettingsDialog::buildDownloadsSection()
 {
     auto* page = new QWidget(this);
     auto* layout = new QVBoxLayout(page);
-    layout->setContentsMargins(22, 22, 22, 22);
+    layout->setContentsMargins(26, 20, 26, 24);
     layout->setSpacing(12);
 
-    auto* box = new QGroupBox(tr("Files"), page);
+    // Untitled on purpose: the section header above already says what this page is,
+    // and a second heading inside it would say the same thing one level down.
+    auto* box = new QGroupBox(page);
     auto* form = new QFormLayout(box);
     form->setFieldGrowthPolicy(QFormLayout::AllNonFixedFieldsGrow);
+    form->setHorizontalSpacing(20);
+    form->setVerticalSpacing(12);
 
     auto* dirRow = new QWidget(box);
     auto* dirLayout = new QHBoxLayout(dirRow);
@@ -234,10 +344,12 @@ QWidget* SettingsDialog::buildPrivacySection()
 {
     auto* page = new QWidget(this);
     auto* layout = new QVBoxLayout(page);
-    layout->setContentsMargins(22, 22, 22, 22);
+    layout->setContentsMargins(26, 20, 26, 24);
     layout->setSpacing(12);
 
-    auto* cookies = new QGroupBox(tr("Cookies"), page);
+    // Untitled on purpose: the section header above already says what this page is,
+    // and a second heading inside it would say the same thing one level down.
+    auto* cookies = new QGroupBox(page);
     auto* cookiesLayout = new QVBoxLayout(cookies);
     m_blockThirdPartyCookies = new QCheckBox(tr("Block third-party cookies"), cookies);
     m_keepCookies = new QCheckBox(tr("Keep cookies when Yozora closes"), cookies);
@@ -249,7 +361,9 @@ QWidget* SettingsDialog::buildPrivacySection()
                                   cookies));
     layout->addWidget(cookies);
 
-    auto* tracking = new QGroupBox(tr("Tracking protection"), page);
+    // Untitled on purpose: the section header above already says what this page is,
+    // and a second heading inside it would say the same thing one level down.
+    auto* tracking = new QGroupBox(page);
     auto* trackingLayout = new QVBoxLayout(tracking);
     m_blockTrackers = new QCheckBox(tr("Block requests to known tracking domains"), tracking);
     m_sendDnt = new QCheckBox(tr("Send \"Do Not Track\" and \"Global Privacy Control\" signals"),
@@ -261,7 +375,9 @@ QWidget* SettingsDialog::buildPrivacySection()
                                    tracking));
     layout->addWidget(tracking);
 
-    auto* notifications = new QGroupBox(tr("Notifications"), page);
+    // Untitled on purpose: the section header above already says what this page is,
+    // and a second heading inside it would say the same thing one level down.
+    auto* notifications = new QGroupBox(page);
     auto* notificationsLayout = new QVBoxLayout(notifications);
     m_notifications = new QCheckBox(tr("Allow sites to ask to show notifications"), notifications);
     notificationsLayout->addWidget(m_notifications);
@@ -271,7 +387,9 @@ QWidget* SettingsDialog::buildPrivacySection()
                                         notifications));
     layout->addWidget(notifications);
 
-    auto* network = new QGroupBox(tr("Network / WebRTC"), page);
+    // Untitled on purpose: the section header above already says what this page is,
+    // and a second heading inside it would say the same thing one level down.
+    auto* network = new QGroupBox(page);
     auto* networkForm = new QFormLayout(network);
     networkForm->setFieldGrowthPolicy(QFormLayout::AllNonFixedFieldsGrow);
     m_webrtcPolicy = new QComboBox(network);
@@ -294,10 +412,12 @@ QWidget* SettingsDialog::buildScrollingSection()
 {
     auto* page = new QWidget(this);
     auto* layout = new QVBoxLayout(page);
-    layout->setContentsMargins(22, 22, 22, 22);
+    layout->setContentsMargins(26, 20, 26, 24);
     layout->setSpacing(12);
 
-    auto* box = new QGroupBox(tr("Scrolling"), page);
+    // Untitled on purpose: the section header above already says what this page is,
+    // and a second heading inside it would say the same thing one level down.
+    auto* box = new QGroupBox(page);
     auto* scrollLayout = new QVBoxLayout(box);
     m_scrollMode = new QComboBox(box);
     m_scrollMode->addItem(tr("Fast (recommended)"),
@@ -321,10 +441,12 @@ QWidget* SettingsDialog::buildDataSection()
 {
     auto* page = new QWidget(this);
     auto* layout = new QVBoxLayout(page);
-    layout->setContentsMargins(22, 22, 22, 22);
+    layout->setContentsMargins(26, 20, 26, 24);
     layout->setSpacing(12);
 
-    auto* box = new QGroupBox(tr("Browsing data"), page);
+    // Untitled on purpose: the section header above already says what this page is,
+    // and a second heading inside it would say the same thing one level down.
+    auto* box = new QGroupBox(page);
     auto* boxLayout = new QVBoxLayout(box);
 
     m_storagePath = new QLabel(box);
@@ -348,7 +470,9 @@ QWidget* SettingsDialog::buildDataSection()
                               box));
     layout->addWidget(box);
 
-    auto* permsBox = new QGroupBox(tr("Stored site permissions"), page);
+    // Untitled on purpose: the section header above already says what this page is,
+    // and a second heading inside it would say the same thing one level down.
+    auto* permsBox = new QGroupBox(page);
     auto* permsLayout = new QVBoxLayout(permsBox);
     m_permissionList = new QListWidget(permsBox);
     m_permissionList->setSelectionMode(QAbstractItemView::ExtendedSelection);
@@ -386,7 +510,7 @@ QWidget* SettingsDialog::buildAboutSection()
 {
     auto* page = new QWidget(this);
     auto* layout = new QVBoxLayout(page);
-    layout->setContentsMargins(22, 22, 22, 22);
+    layout->setContentsMargins(26, 20, 26, 24);
     layout->setSpacing(12);
 
     m_versionLabel = new QLabel(page);

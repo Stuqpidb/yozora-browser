@@ -24,6 +24,10 @@ public:
     void record(const QString& url, const QString& title);
     [[nodiscard]] QList<HistoryEntry> recent(int limit) const;
     [[nodiscard]] int count() const { return static_cast<int>(m_items.size()); }
+
+    // Drops a single entry, so the history window can remove one row without
+    // clearing everything.
+    void remove(const QString& url);
     void clear();
 
 signals:

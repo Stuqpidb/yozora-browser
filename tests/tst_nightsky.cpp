@@ -49,7 +49,8 @@ class TestNightSky : public QObject {
 private slots:
     void paintsSomethingOpaque();
     void hasStars();
-    void theMoonIsInTheCorner();
+    void theCentreHasNoBrightBody();
+    void hasNoLargeBrightBody();
     void isDeterministic();
     void survivesAResize();
 };
@@ -78,17 +79,47 @@ void TestNightSky::hasStars()
     QVERIFY2(bright > 60, qPrintable(QStringLiteral("only %1 bright samples").arg(bright)));
 }
 
-void TestNightSky::theMoonIsInTheCorner()
+void TestNightSky::theCentreHasNoBrightBody()
 {
+    // The search field and the wordmark sit in the middle of the page, so nothing
+    // bright may be painted there. The corners cannot be used as the baseline
+    // here: the vignette deliberately darkens them, which makes the centre the
+    // brightest region of the whole sky by design. So this counts near-white
+    // pixels in the middle instead - a moon would fill the whole area, whereas
+    // stars contribute a handful.
     const QImage image = render();
-    // The moon sits in the upper right and has to be the brightest thing on the
-    // page, or it reads as a smudge. Compared on the mean over the disc, since
-    // the surrounding halo would otherwise carry the comparison on its own.
-    const qreal moon = meanLuminance(image, QRect(700, 60, 68, 68));
-    const qreal elsewhere = meanLuminance(image, QRect(40, 300, 240, 240));
-    QVERIFY2(moon > 0.55, qPrintable(QStringLiteral("moon mean %1").arg(moon)));
-    QVERIFY2(moon > elsewhere * 3.0,
-             qPrintable(QStringLiteral("moon %1 vs background %2").arg(moon).arg(elsewhere)));
+    const QRect centre(300, 200, 300, 200);
+    int bright = 0;
+    for (int y = centre.top(); y <= centre.bottom(); ++y) {
+        for (int x = centre.left(); x <= centre.right(); ++x) {
+            if (image.pixelColor(x, y).value() > 225) {
+                ++bright;
+            }
+        }
+    }
+    QVERIFY2(bright < 60, qPrintable(QStringLiteral("%1 near-white pixels in the centre")
+                                         .arg(bright)));
+    // Sanity check on the measurement itself: the stars are still there, just
+    // not in a blob. A count of zero would also satisfy the assert above.
+    QVERIFY2(meanLuminance(image, centre) > 0.02,
+             "the centre is not painted at all");
+}
+
+void TestNightSky::hasNoLargeBrightBody()
+{
+    // A disc the size of the old moon would show up as a dense block of very
+    // bright pixels. The brightest single object allowed here is a star.
+    const QImage image = render();
+    int bright = 0;
+    for (int y = 0; y < image.height(); ++y) {
+        for (int x = 0; x < image.width(); ++x) {
+            if (image.pixelColor(x, y).value() > 225) {
+                ++bright;
+            }
+        }
+    }
+    // 14 flared stars with a couple of pixels each, and nothing else.
+    QVERIFY2(bright < 900, qPrintable(QStringLiteral("%1 near-white pixels").arg(bright)));
 }
 
 void TestNightSky::isDeterministic()

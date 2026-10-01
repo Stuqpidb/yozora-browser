@@ -34,9 +34,17 @@ namespace yozora {
 namespace {
 
 constexpr int kTileSize = 88;
-constexpr int kTileSpacing = 10;
+constexpr int kTileSpacing = 8;
+// The floor for a tile's width. Below this its own label no longer fits under
+// the icon, so the row wraps instead of squeezing.
+constexpr int kMinTileWidth = 84;
+// The narrowest a tile is allowed to get when the row has to divide exactly.
+constexpr int kNarrowTileWidth = 72;
 constexpr int kFieldWidth = 604;
 constexpr int kFieldHeight = 58;
+// The row of tiles is laid out in the same width as the visible part of the
+// search field, which is what makes the two line up.
+constexpr int kFieldSurface = kFieldWidth;
 
 // A round, coloured tile with the first letter of the site. The hue comes from
 // the address, so the same site always looks the same.
@@ -105,9 +113,24 @@ PinnedSites::PinnedSites(QWidget* parent)
 QSize PinnedSites::sizeHint() const
 {
     const int count = m_sites.size() + 1;
-    const int columns = qMax(1, qMin(count, 9));
+    int columns = qMax(1, qMin(count, 9));
+    if (m_contentWidth > 0) {
+        columns = qMax(1, qMin(count, m_contentWidth / kMinTileWidth));
+    }
     const int rows = (count + columns - 1) / columns;
-    return {columns * (kTileSize + kTileSpacing), rows * (kTileSize + kTileSpacing)};
+    const int width = m_contentWidth > 0
+        ? m_contentWidth
+        : columns * (kTileSize + kTileSpacing);
+    return {width, rows * kTileSize + (rows - 1) * kTileSpacing};
+}
+
+void PinnedSites::setContentWidth(int width)
+{
+    if (m_contentWidth == width) {
+        return;
+    }
+    m_contentWidth = width;
+    rebuild();
 }
 
 void PinnedSites::rebuild()
@@ -119,9 +142,21 @@ void PinnedSites::rebuild()
         delete item;
     }
 
-    // A single row while the list is short; it starts wrapping when the user
-    // pins more than a handful of sites.
-    const int columns = qMax(1, qMin(m_sites.size() + 1, 9));
+    // How many tiles fit across. When the row has a width to divide (it lines
+    // up with the search field), the tile size follows from the column count so
+    // the row's edges land exactly on those lines; otherwise a fixed tile is
+    // used and the row is simply centred.
+    const int count = m_sites.size() + 1;
+    int columns = qMax(1, qMin(count, 9));
+    if (m_contentWidth > 0) {
+        columns = qMax(1, qMin(count, m_contentWidth / kMinTileWidth));
+    }
+
+    const int gaps = kTileSpacing * (columns - 1);
+    const int tileWidth = m_contentWidth > 0
+        ? qBound(kNarrowTileWidth, (m_contentWidth - gaps) / columns, kTileSize)
+        : kTileSize;
+
     int index = 0;
     for (const Site& site : std::as_const(m_sites)) {
         auto* tile = new QToolButton(this);
@@ -132,7 +167,7 @@ void PinnedSites::rebuild()
         tile->setText(site.title);
         tile->setToolTip(site.url);
         tile->setCursor(Qt::PointingHandCursor);
-        tile->setFixedSize(kTileSize, kTileSize);
+        tile->setFixedSize(tileWidth, kTileSize);
         tile->setContextMenuPolicy(Qt::CustomContextMenu);
         const QString url = site.url;
         connect(tile, &QToolButton::clicked, this, [this, url] { emit openUrl(QUrl(url)); });
@@ -153,7 +188,7 @@ void PinnedSites::rebuild()
     add->setIcon(icons::icon(icons::Shape::Plus, 26, QColor(Theme::colors().textMuted)));
     add->setToolTip(tr("Add a site"));
     add->setCursor(Qt::PointingHandCursor);
-    add->setFixedSize(kTileSize, kTileSize);
+    add->setFixedSize(tileWidth, kTileSize);
     connect(add, &QToolButton::clicked, this, &PinnedSites::addSite);
     m_grid->addWidget(add, index / columns, index % columns);
 
@@ -335,6 +370,7 @@ void HomePage::buildLayout()
     m_pinsTitle->setFont(pinsFont);
 
     m_pins = new PinnedSites(this);
+    m_pins->setContentWidth(kFieldSurface);
     connect(m_pins, &PinnedSites::openUrl, this, &HomePage::openUrl);
 
     m_root->addWidget(m_wordmark, 0, Qt::AlignHCenter);

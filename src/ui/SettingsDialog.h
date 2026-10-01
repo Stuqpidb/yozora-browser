@@ -11,6 +11,8 @@ class QLineEdit;
 class QListWidget;
 class QPushButton;
 class QRadioButton;
+class QShowEvent;
+class QStackedWidget;
 class QWidget;
 
 namespace yozora {
@@ -27,7 +29,19 @@ class SettingsDialog : public QDialog {
 public:
     SettingsDialog(Settings* settings, WebProfile* profile, QWidget* parent = nullptr);
 
+protected:
+    void showEvent(QShowEvent* event) override;
+
 private:
+    struct Section;
+
+    // Wraps a section's page in a header (title + one-line explanation) and a
+    // scroll area, so a page with more content than fits does not get clipped and
+    // every section starts with the same two lines.
+    [[nodiscard]] QWidget* wrapSection(const Section& section, QWidget* parent);
+    // Fades the incoming page in and the outgoing one out.
+    void showSection(QStackedWidget* stack, int row);
+
     QWidget* buildSearchSection();
     QWidget* buildStartupSection();
     QWidget* buildDownloadsSection();
@@ -73,6 +87,7 @@ private:
     QLabel* m_storagePath = nullptr;
     QListWidget* m_permissionList = nullptr;
     QListWidget* m_nav = nullptr;
+    QStackedWidget* m_pages = nullptr;
 
     QLabel* m_versionLabel = nullptr;
     QDialogButtonBox* m_buttons = nullptr;

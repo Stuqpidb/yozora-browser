@@ -72,6 +72,8 @@ add_library(yozora_core STATIC
     src/browser/BrowserTab.h
     src/browser/BrowserWindow.cpp
     src/browser/BrowserWindow.h
+    src/core/Animation.cpp
+    src/core/Animation.h
     src/core/BookmarkStore.cpp
     src/core/BookmarkStore.h
     src/core/Glass.cpp
@@ -105,6 +107,8 @@ add_library(yozora_core STATIC
     src/ui/GlassField.cpp
     src/ui/GlassField.h
     src/ui/Icons.h
+    src/ui/LibraryDialog.cpp
+    src/ui/LibraryDialog.h
     src/ui/NavigationBar.cpp
     src/ui/NavigationBar.h
     src/ui/NavButton.cpp

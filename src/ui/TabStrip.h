@@ -47,16 +47,35 @@ protected:
     void wheelEvent(QWheelEvent* event) override;
 
 private:
+    // The hover highlight of every tab, as an animated 0..1 value each. Keeping
+    // one value per tab (rather than a single index) is what makes the
+    // highlight glide from one tab to the next instead of jumping.
+    class HoverTrack {
+    public:
+        void resize(int count);
+        void set(int index, qreal target);
+        [[nodiscard]] qreal value(int index) const;
+        void advance(qreal step);
+        [[nodiscard]] bool atRest() const;
+
+    private:
+        QList<qreal> m_values;
+    };
+
     [[nodiscard]] QRect tabRect(int index) const;
     [[nodiscard]] QRect closeRect(int index) const;
     [[nodiscard]] QRect plusRect() const;
     [[nodiscard]] int tabAt(const QPoint& pos) const;
     [[nodiscard]] int dropIndexFor(const QPoint& pos) const;
     [[nodiscard]] int tabWidth() const;
+    void startHoverAnimation();
 
     QList<Tab> m_tabs;
     int m_current = -1;
     int m_hover = -1;
+    HoverTrack m_hoverAmount;
+    // True while the highlight is still moving, so the strip repaints itself.
+    bool m_hoverAnimating = false;
     bool m_closeHover = false;
     bool m_plusHover = false;
 

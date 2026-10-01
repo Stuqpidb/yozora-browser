@@ -1,12 +1,16 @@
 // SPDX-License-Identifier: MIT
 #include "ui/RailButton.h"
 
+#include "core/Animation.h"
 #include "core/Glass.h"
 #include "core/Theme.h"
 
+#include <QEnterEvent>
+#include <QMouseEvent>
 #include <QPainter>
 #include <QPainterPath>
 #include <QPaintEvent>
+#include <QVariantAnimation>
 #include <QtMath>
 
 namespace yozora {
@@ -133,6 +137,16 @@ void drawIcon(QPainter& painter, RailIcon icon, const QRectF& box, const QColor&
             painter.restore();
             break;
         }
+        case RailIcon::Collapse: {
+            // A chevron pointing left, i.e. towards the edge the rail collapses
+            // into. Drawn rather than taken from a font so it matches the rest.
+            QPainterPath chevron;
+            chevron.moveTo(box.right() - 6.0, box.top() + 4.0);
+            chevron.lineTo(box.center().x() - 1.0, c.y());
+            chevron.lineTo(box.right() - 6.0, box.bottom() - 4.0);
+            strokePath(painter, chevron, pen);
+            break;
+        }
     }
 }
 
@@ -143,10 +157,24 @@ RailButton::RailButton(RailIcon icon, const QString& tooltip, QWidget* parent)
     , m_icon(icon)
 {
     setToolTip(tooltip);
-    setCheckable(true);
     setFocusPolicy(Qt::NoFocus);
     setCursor(Qt::PointingHandCursor);
     setAttribute(Qt::WA_Hover, true);
+    syncAnimations();
+}
+
+void RailButton::syncAnimations()
+{
+    const auto track = [this](QVariantAnimation** animation, auto apply) {
+        *animation = new QVariantAnimation(this);
+        Animation::configure(*animation, Animation::kQuickMs);
+        connect(*animation, &QVariantAnimation::valueChanged, this, [this, apply](const QVariant& v) {
+            apply(v.toReal());
+            update();
+        });
+    };
+    track(&m_hoverAnimation, [this](qreal v) { m_hover = v; });
+    track(&m_pressAnimation, [this](qreal v) { m_press = v; });
 }
 
 void RailButton::setIcon(RailIcon icon)
@@ -155,9 +183,51 @@ void RailButton::setIcon(RailIcon icon)
     update();
 }
 
+void RailButton::setCurrent(bool current)
+{
+    if (m_current == current) {
+        return;
+    }
+    m_current = current;
+    // The current location is not checkable any more, so QAbstractButton would
+    // not repaint on its own.
+    update();
+}
+
 QSize RailButton::sizeHint() const
 {
     return {48, 48};
+}
+
+void RailButton::enterEvent(QEnterEvent* event)
+{
+    QAbstractButton::enterEvent(event);
+    Animation::start(m_hoverAnimation, m_hover, 1.0);
+}
+
+void RailButton::leaveEvent(QEvent* event)
+{
+    QAbstractButton::leaveEvent(event);
+    // A press that is released outside the button must not leave the highlight
+    // stuck, so the press state follows the pointer.
+    Animation::start(m_hoverAnimation, m_hover, 0.0);
+    Animation::start(m_pressAnimation, m_press, 0.0);
+}
+
+void RailButton::mousePressEvent(QMouseEvent* event)
+{
+    QAbstractButton::mousePressEvent(event);
+    if (event->button() == Qt::LeftButton) {
+        Animation::start(m_pressAnimation, m_press, 1.0);
+    }
+}
+
+void RailButton::mouseReleaseEvent(QMouseEvent* event)
+{
+    QAbstractButton::mouseReleaseEvent(event);
+    if (event->button() == Qt::LeftButton) {
+        Animation::start(m_pressAnimation, m_press, 0.0);
+    }
 }
 
 void RailButton::paintEvent(QPaintEvent* event)
@@ -168,25 +238,46 @@ void RailButton::paintEvent(QPaintEvent* event)
 
     const auto c = Theme::colors();
     const QRectF pill = QRectF(rect()).adjusted(1, 1, -1, -1);
-    const bool on = isChecked();
-    const bool hover = underMouse();
 
-    // The active item gets a real glass pill with the accent showing through,
-    // so the current location is obvious at a glance.
-    if (on || hover) {
-        Glass::Recipe glass = Glass::recipe(pill.width() / 2.0);
-        if (on) {
-            const QColor accent(c.accent);
-            glass.fill = QColor(accent.red(), accent.green(), accent.blue(), 46);
-            glass.fillTop = QColor(accent.red(), accent.green(), accent.blue(), 64);
-            glass.stroke = QColor(accent.red(), accent.green(), accent.blue(), 120);
-        }
-        Glass::paintPanel(painter, pill, glass, 1.0);
+    // The pressed pill shrinks slightly. It is the only motion in the rail that
+    // is not a fade, which is what makes a click feel like it landed on
+    // something physical.
+    const qreal squeeze = 1.0 - 0.07 * m_press;
+    const QRectF target = pill.center().isNull()
+        ? pill
+        : QRectF(pill.center().x() - pill.width() * squeeze / 2.0,
+                 pill.center().y() - pill.height() * squeeze / 2.0,
+                 pill.width() * squeeze, pill.height() * squeeze);
+
+    if (m_current) {
+        // The current location keeps a glass pill with the accent in it. Only
+        // this state is ever accent coloured.
+        Glass::Recipe glass = Glass::recipe(target.width() / 2.0);
+        const QColor accent(c.accent);
+        glass.fill = QColor(accent.red(), accent.green(), accent.blue(), 44);
+        glass.fillTop = QColor(accent.red(), accent.green(), accent.blue(), 62);
+        glass.stroke = QColor(accent.red(), accent.green(), accent.blue(), 116);
+        Glass::paintPanel(painter, target, glass, 1.0);
+    } else if (m_hover > 0.001) {
+        // Hover is a plain surface, not the accent: it says "this responds to
+        // the pointer", not "you are here".
+        Glass::Recipe glass = Glass::recipe(target.width() / 2.0);
+        glass.fill = QColor(255, 255, 255, 14);
+        glass.fillTop = QColor(255, 255, 255, 22);
+        glass.stroke = QColor(255, 255, 255, 30);
+        glass.grain = false;
+        Glass::paintPanel(painter, target, glass, m_hover);
     }
 
-    QColor line = on ? QColor(c.accent) : QColor(c.textMuted);
-    if (!on && hover) {
-        line = QColor(c.text);
+    QColor line = m_current ? QColor(c.accent) : QColor(c.textMuted);
+    if (!m_current && m_hover > 0.0) {
+        // Fade the glyph towards full brightness along with the pill, so the
+        // two never disagree about how "hot" the button is.
+        const QColor muted(c.textMuted);
+        const QColor full(c.text);
+        line = QColor::fromRgbF(muted.redF() + (full.redF() - muted.redF()) * m_hover,
+                                muted.greenF() + (full.greenF() - muted.greenF()) * m_hover,
+                                muted.blueF() + (full.blueF() - muted.blueF()) * m_hover);
     }
 
     const QRectF box((width() - kBox) / 2.0, (height() - kBox) / 2.0, kBox, kBox);

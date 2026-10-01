@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: MIT
 #include "ui/GlassField.h"
 
+#include "core/Animation.h"
 #include "core/Glass.h"
 #include "core/Theme.h"
 
@@ -9,6 +10,7 @@
 #include <QMouseEvent>
 #include <QPainter>
 #include <QResizeEvent>
+#include <QVariantAnimation>
 #include <QWidget>
 
 namespace yozora {
@@ -31,8 +33,12 @@ GlassField::GlassField(QWidget* parent)
     connect(m_editor, &QLineEdit::returnPressed, this, &GlassField::returnPressed);
     connect(m_editor, &QLineEdit::textChanged, this, &GlassField::textChanged);
     connect(m_editor, &QLineEdit::editingFinished, this, &GlassField::editingFinished);
-
+    // The focus ring is animated from the container, so it needs to hear about
+    // focus changes: the editor is the widget that actually gets the focus.
+    // QLineEdit has no focus signals, so the container's event filter is used -
+    // it already sees every event the editor gets.
     layoutEditor();
+    syncAnimations();
 }
 
 QString GlassField::text() const
@@ -122,6 +128,16 @@ void GlassField::setHeroMode(bool hero)
     update();
 }
 
+void GlassField::syncAnimations()
+{
+    m_focusAnimation = new QVariantAnimation(this);
+    Animation::configure(m_focusAnimation, Animation::kQuickMs);
+    connect(m_focusAnimation, &QVariantAnimation::valueChanged, this, [this](const QVariant& v) {
+        m_focus = v.toReal();
+        update();
+    });
+}
+
 qreal GlassField::iconSize() const
 {
     // The icons scale with the field, so a 40px toolbar field and a 56px
@@ -155,7 +171,13 @@ void GlassField::layoutEditor()
         : qRound(pad + icon + gap);
 
     const QRectF surface = surfaceRect();
-    const QRect area = surface.toRect().adjusted(left, 0, -right, 0);
+    // The editor is inset vertically as well. A child widget paints after the
+    // parent, so if it reaches the top and bottom of the pill it draws its own
+    // one-pixel border right on top of the surface's - which is why the focus
+    // ring used to appear on the left and right ends but not across the middle
+    // of the top and bottom edges.
+    const int inset = 3;
+    const QRect area = surface.toRect().adjusted(left, inset, -right, -inset);
     if (area.width() > 0) {
         m_editor->setGeometry(area);
     }
@@ -172,6 +194,11 @@ bool GlassField::eventFilter(QObject* watched, QEvent* event)
     if (watched == m_editor) {
         if (event->type() == QEvent::FocusIn) {
             emit editorFocused();
+            // The ring is animated, so the repaint has to be requested here:
+            // the editor took the focus, not the container.
+            update();
+        } else if (event->type() == QEvent::FocusOut) {
+            update();
         } else if (event->type() == QEvent::KeyPress) {
             auto* key = static_cast<QKeyEvent*>(event);
             if (key->key() == Qt::Key_Escape && !m_editor->text().isEmpty()) {
@@ -220,11 +247,24 @@ void GlassField::paintEvent(QPaintEvent* event)
     Glass::paintShadow(painter, pill, glass, 0.8);
     Glass::paintPanel(painter, pill, glass, 1.0);
 
-    if (m_editor->hasFocus()) {
+    // The ring fades in instead of appearing on the first click, and it fades
+    // out again when focus leaves. A ring that blinks is more distracting than
+    // no ring at all.
+    const qreal target = m_editor->hasFocus() ? 1.0 : 0.0;
+    if (!qFuzzyCompare(m_focus + 0.0001, target)) {
+        Animation::start(m_focusAnimation, m_focus, target);
+    }
+    if (m_focus > 0.002) {
+        QColor ring(c.accent);
+        ring.setAlphaF(ring.alphaF() * m_focus);
         painter.setBrush(Qt::NoBrush);
-        painter.setPen(QPen(QColor(c.accent), 1.4));
-        painter.drawRoundedRect(pill, m_radius, m_radius);
-    } else if (underMouse()) {
+        painter.setPen(QPen(ring, 1.4));
+        // The ring is drawn just outside the panel, so it cannot be clipped by
+        // the surface's own edge either.
+        painter.drawRoundedRect(pill.adjusted(-0.6, -0.6, 0.6, 0.6), m_radius + 0.6,
+                                m_radius + 0.6);
+    }
+    if (underMouse() && m_focus < 0.01) {
         painter.setBrush(Qt::NoBrush);
         painter.setPen(QPen(QColor(c.border), 1.0));
         painter.drawRoundedRect(pill, m_radius, m_radius);

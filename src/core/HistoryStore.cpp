@@ -72,6 +72,18 @@ QList<HistoryEntry> HistoryStore::recent(int limit) const
     return m_items.mid(0, limit);
 }
 
+void HistoryStore::remove(const QString& url)
+{
+    // Every visit to the same address is its own entry, so this drops them all.
+    const qsizetype before = m_items.size();
+    m_items.removeIf([&url](const HistoryEntry& entry) { return entry.url == url; });
+    if (m_items.size() == before) {
+        return;
+    }
+    scheduleSave();
+    emit changed();
+}
+
 void HistoryStore::clear()
 {
     if (m_items.isEmpty()) {
