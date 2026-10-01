@@ -24,7 +24,9 @@ class Settings;
 class SideBar;
 class TabStrip;
 class UpdateChecker;
+class UpdateDialog;
 class WebProfile;
+struct ReleaseInfo;
 
 // The Yozora main window. Its chrome is fully custom: a left navigation rail, a
 // custom tab strip and a navigation bar, with a stack of page views behind them.
@@ -84,6 +86,10 @@ private:
     void updateForActiveTab();
     void updateTabLabel(int index);
     void showStatusMessage(const QString& message);
+    // Update flow. The window owns the checker and the dialog; the checker owns
+    // the network, and the dialog never fetches or launches anything itself.
+    void showUpdateOffer(const ReleaseInfo& info);
+    void showUpdateProblem(const QString& reason);
     void handleExternalProtocol(const QUrl& url, int navigationType);
     void toggleBookmark();
     void updateBookmarkStar();
@@ -96,6 +102,7 @@ private:
     BookmarkStore* m_bookmarks = nullptr;
     HistoryStore* m_history = nullptr;
     UpdateChecker* m_updateChecker = nullptr;
+    QPointer<UpdateDialog> m_updateDialog;
     PermissionManager* m_permissions = nullptr;
 
     SideBar* m_sideBar = nullptr;

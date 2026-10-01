@@ -29,6 +29,15 @@ class SettingsDialog : public QDialog {
 public:
     SettingsDialog(Settings* settings, WebProfile* profile, QWidget* parent = nullptr);
 
+    // Called by the window once an update check has answered. Kept here so the
+    // button and its result text stay in one place.
+    void setUpdateCheckResult(const QString& text, bool failed);
+
+signals:
+    // The user pressed "Check for updates". The dialog never fetches anything
+    // itself; the window owns the UpdateChecker.
+    void updateCheckRequested();
+
 protected:
     void showEvent(QShowEvent* event) override;
 
@@ -89,6 +98,8 @@ private:
     QListWidget* m_nav = nullptr;
     QStackedWidget* m_pages = nullptr;
 
+    QPushButton* m_checkUpdates = nullptr;
+    QLabel* m_updateStatus = nullptr;
     QLabel* m_versionLabel = nullptr;
     QDialogButtonBox* m_buttons = nullptr;
 };

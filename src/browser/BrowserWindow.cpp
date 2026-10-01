@@ -18,6 +18,7 @@
 #include "ui/SettingsDialog.h"
 #include "ui/SideBar.h"
 #include "ui/TabStrip.h"
+#include "ui/UpdateDialog.h"
 #include "utils/UrlUtils.h"
 #include "utils/Version.h"
 #include "web/DownloadManager.h"
@@ -150,6 +151,39 @@ void BrowserWindow::buildUi()
     if (m_settings->sideBarCollapsed()) {
         m_sideBar->setCollapsed(true, false);
     }
+
+    // The update signals are wired once, here, rather than inside buildMenu().
+    // The menu is rebuilt every time it is opened, and connecting there added one
+    // more connection per opening - after a dozen openings a single check would
+    // report its result a dozen times.
+    connect(m_updateChecker, &UpdateChecker::updateCheckFailed, this,
+            [this](const QString& reason, ReleaseError) {
+                // A failure is worth a dialog: the usual causes (no network, no
+                // public release) need a sentence, not a line in a status strip
+                // that is gone before it has been read.
+                showUpdateProblem(reason);
+            });
+    connect(m_updateChecker, &UpdateChecker::updateCheckFinished, this, [this](bool hasUpdate) {
+        if (!hasUpdate) {
+            showStatusMessage(tr("Yozora is up to date"));
+        }
+    });
+    connect(m_updateChecker, &UpdateChecker::updateAvailable, this,
+            [this](const ReleaseInfo& info) { showUpdateOffer(info); });
+    connect(m_updateChecker, &UpdateChecker::updateDownloadStarted, this,
+            [this](const QString& fileName, qint64 total) {
+                m_updateDialog->beginDownload(fileName, total);
+            });
+    connect(m_updateChecker, &UpdateChecker::updateDownloadProgress, this,
+            [this](qint64 received, qint64 total) {
+                m_updateDialog->setProgress(received, total);
+            });
+    connect(m_updateChecker, &UpdateChecker::updateDownloadFinished, this,
+            [this](const QString& path, bool sizeMatched) {
+                m_updateDialog->finishDownload(path, sizeMatched);
+            });
+    connect(m_updateChecker, &UpdateChecker::updateDownloadFailed, this,
+            [this](const QString& reason) { m_updateDialog->failDownload(reason); });
 
     connect(m_tabStrip, &TabStrip::currentChanged, this, &BrowserWindow::selectTab);
     connect(m_tabStrip, &TabStrip::closeRequested, this, &BrowserWindow::closeTab);
@@ -560,6 +594,23 @@ void BrowserWindow::handleExternalProtocol(const QUrl& url, int navigationType)
 void BrowserWindow::showSettings()
 {
     SettingsDialog dialog(m_settings, m_profile, this);
+    connect(&dialog, &SettingsDialog::updateCheckRequested, this, [this, &dialog] {
+        m_updateChecker->checkNow();
+    });
+    connect(m_updateChecker, &UpdateChecker::updateCheckFailed, this,
+            [&dialog](const QString& reason, ReleaseError) {
+                dialog.setUpdateCheckResult(reason, true);
+            });
+    connect(m_updateChecker, &UpdateChecker::updateCheckFinished, this, [&dialog](bool hasUpdate) {
+        if (!hasUpdate) {
+            dialog.setUpdateCheckResult(tr("Yozora is up to date."), false);
+        }
+    });
+    connect(m_updateChecker, &UpdateChecker::updateAvailable, this,
+            [&dialog](const ReleaseInfo& info) {
+                dialog.setUpdateCheckResult(
+                    tr("Yozora %1 is available.").arg(info.version.toString()), false);
+            });
     dialog.exec();
     if (auto* tab = currentTab()) {
         tab->updateSearchEngineUi();
@@ -612,6 +663,51 @@ void BrowserWindow::showLibrary(bool bookmarks)
     }
 }
 
+void BrowserWindow::showUpdateOffer(const ReleaseInfo& info)
+{
+    if (!m_updateDialog) {
+        m_updateDialog = new UpdateDialog(this);
+        m_updateDialog->setAttribute(Qt::WA_DeleteOnClose);
+        // Every action the dialog offers is wired once, here: the window owns the
+        // download, the dialog only reports what the user pressed.
+        connect(m_updateDialog, &UpdateDialog::downloadRequested, this, [this] {
+            m_updateChecker->downloadUpdate();
+        });
+        connect(m_updateDialog, &UpdateDialog::openPageRequested, this, [](const QUrl& url) {
+            if (url.isValid()) {
+                QDesktopServices::openUrl(url);
+            }
+        });
+        connect(m_updateDialog, &UpdateDialog::runInstallerRequested, this,
+                [](const QString& path) { DownloadManager::openFile(path); });
+        connect(m_updateDialog, &UpdateDialog::cancelRequested, m_updateChecker,
+                &UpdateChecker::cancelDownload);
+    }
+    m_updateDialog->offerRelease(info);
+    m_updateDialog->show();
+    m_updateDialog->raise();
+    m_updateDialog->activateWindow();
+}
+
+void BrowserWindow::showUpdateProblem(const QString& reason)
+{
+    if (!m_updateDialog) {
+        m_updateDialog = new UpdateDialog(this);
+        m_updateDialog->setAttribute(Qt::WA_DeleteOnClose);
+        connect(m_updateDialog, &UpdateDialog::openPageRequested, this, [](const QUrl& url) {
+            if (url.isValid()) {
+                QDesktopServices::openUrl(url);
+            }
+        });
+        connect(m_updateDialog, &UpdateDialog::runInstallerRequested, this,
+                [](const QString& path) { DownloadManager::openFile(path); });
+    }
+    m_updateDialog->showProblem(reason);
+    m_updateDialog->show();
+    m_updateDialog->raise();
+    m_updateDialog->activateWindow();
+}
+
 void BrowserWindow::showStatusMessage(const QString& message)
 {
     m_navBar->showMessage(message);
@@ -655,18 +751,6 @@ void BrowserWindow::buildMenu(const QPoint& globalPos)
     connect(checkUpdate, &QAction::triggered, this, [this] {
         showStatusMessage(tr("Checking for updates..."));
         m_updateChecker->checkNow();
-    });
-    connect(m_updateChecker, &UpdateChecker::updateAvailable, this,
-            [this](const QString& version, const QUrl& url) {
-                m_navBar->showMessage(tr("New version available: %1").arg(version), 8000);
-                QDesktopServices::openUrl(url);
-            });
-    connect(m_updateChecker, &UpdateChecker::updateCheckFailed, this,
-            [this](const QString& reason) { showStatusMessage(reason); });
-    connect(m_updateChecker, &UpdateChecker::updateCheckFinished, this, [this](bool hasUpdate) {
-        if (!hasUpdate) {
-            showStatusMessage(tr("Yozora is up to date"));
-        }
     });
     menu.addSeparator();
 

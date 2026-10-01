@@ -26,6 +26,7 @@
 #include <QScrollArea>
 #include <QShowEvent>
 #include <QStackedWidget>
+#include <QStyle>
 #include <QVariantAnimation>
 #include <QVBoxLayout>
 
@@ -525,9 +526,46 @@ QWidget* SettingsDialog::buildAboutSection()
                            "or Mozilla."),
                         page);
     layout->addWidget(engine);
+    layout->addSpacing(6);
+
+    // Updates are a button rather than a menu item hidden three levels deep.
+    // Nothing is fetched until this is pressed.
+    auto* updates = new QGroupBox(page);
+    auto* updatesLayout = new QVBoxLayout(updates);
+    m_checkUpdates = new QPushButton(tr("Check for updates"), updates);
+    m_checkUpdates->setCursor(Qt::PointingHandCursor);
+    m_updateStatus = new QLabel(updates);
+    m_updateStatus->setObjectName(QStringLiteral("hintLabel"));
+    m_updateStatus->setWordWrap(true);
+    updatesLayout->addWidget(m_checkUpdates);
+    updatesLayout->addWidget(m_updateStatus);
+    layout->addWidget(updates);
+
+    connect(m_checkUpdates, &QPushButton::clicked, this, [this] {
+        m_checkUpdates->setEnabled(false);
+        m_checkUpdates->setText(tr("Checking..."));
+        m_updateStatus->setText(tr("Asking GitHub for the latest release..."));
+        emit updateCheckRequested();
+    });
+
     layout->addWidget(separator());
     layout->addStretch(1);
     return page;
+}
+
+void SettingsDialog::setUpdateCheckResult(const QString& text, bool failed)
+{
+    m_checkUpdates->setEnabled(true);
+    m_checkUpdates->setText(tr("Check for updates"));
+    m_updateStatus->setText(text);
+    if (failed) {
+        m_updateStatus->setObjectName(QStringLiteral("dialogSubtitle"));
+    } else {
+        m_updateStatus->setObjectName(QStringLiteral("hintLabel"));
+    }
+    // The status colour comes from the object name, so it has to be re-polished.
+    m_updateStatus->style()->unpolish(m_updateStatus);
+    m_updateStatus->style()->polish(m_updateStatus);
 }
 
 void SettingsDialog::loadFromSettings()

@@ -125,6 +125,8 @@ add_library(yozora_core STATIC
     src/ui/TabStrip.h
     src/ui/TabWidget.cpp
     src/ui/TabWidget.h
+    src/ui/UpdateDialog.cpp
+    src/ui/UpdateDialog.h
     src/utils/UrlUtils.cpp
     src/utils/UrlUtils.h
     src/web/ErrorPage.cpp
