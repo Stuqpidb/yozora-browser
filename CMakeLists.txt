@@ -1,7 +1,7 @@
 cmake_minimum_required(VERSION 3.21)
 
 project(Yozora
-    VERSION 0.2.1
+    VERSION 0.2.2
     DESCRIPTION "Yozora Browser - a native desktop browser built with C++ and Qt WebEngine"
     HOMEPAGE_URL "https://github.com/Stuqpidb/yozora-browser"
     LANGUAGES CXX
@@ -188,9 +188,16 @@ set_target_properties(yozora PROPERTIES
     MACOSX_BUNDLE_GUI_IDENTIFIER "org.yozora.browser"
 )
 
-# Icon and version information in the executable itself.
+# Icon and version information in the executable itself. The resource script is
+# a template: the version comes from PROJECT_VERSION, so the file properties can
+# never disagree with the About page or the installer.
 if(WIN32)
-    target_sources(yozora PRIVATE installer/yozora.rc)
+    configure_file(
+        "${CMAKE_CURRENT_SOURCE_DIR}/installer/yozora.rc.in"
+        "${CMAKE_CURRENT_BINARY_DIR}/generated/yozora.rc"
+        @ONLY
+    )
+    target_sources(yozora PRIVATE "${CMAKE_CURRENT_BINARY_DIR}/generated/yozora.rc")
 endif()
 
 # ---------------------------------------------------------------------------

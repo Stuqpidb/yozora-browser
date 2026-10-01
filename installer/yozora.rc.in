@@ -1,15 +1,21 @@
 // Windows resource script for Yozora.exe.
 //
+// Configured by CMake from this template (see CMakeLists.txt), so the version in
+// the file properties, the installer and the About page all come from the single
+// PROJECT_VERSION and cannot drift apart. It used to be a plain .rc with the
+// numbers typed in, and they did drift: the FILEVERSION said 0.1 while the
+// string table said 0.2.1 and the binary said 0.2.2.
+//
 // Only compiled on Windows. It attaches the application icon and the version
-// information so the file properties, installer and task manager all report the
-// same version as the CMake project.
+// information.
 #include <winver.h>
 
-IDI_ICON1 ICON "yozora.ico"
+// Quoted because the source tree can sit under a path with spaces in it.
+IDI_ICON1 ICON "@CMAKE_CURRENT_SOURCE_DIR@/installer/yozora.ico"
 
-#define YOZORA_VER_MAJOR 0
-#define YOZORA_VER_MINOR 1
-#define YOZORA_VER_PATCH 0
+#define YOZORA_VER_MAJOR @PROJECT_VERSION_MAJOR@
+#define YOZORA_VER_MINOR @PROJECT_VERSION_MINOR@
+#define YOZORA_VER_PATCH @PROJECT_VERSION_PATCH@
 #define YOZORA_VER_BUILD 0
 
 VS_VERSION_INFO VERSIONINFO
@@ -31,11 +37,11 @@ BEGIN
         BEGIN
             VALUE "CompanyName",      "The Yozora Browser Authors"
             VALUE "FileDescription",  "Yozora Browser"
-            VALUE "FileVersion",      "0.2.1.0"
+            VALUE "FileVersion",      "@PROJECT_VERSION@.0"
             VALUE "InternalName",     "Yozora"
             VALUE "OriginalFilename", "Yozora.exe"
             VALUE "ProductName",      "Yozora Browser"
-            VALUE "ProductVersion",   "0.2.1.0"
+            VALUE "ProductVersion",   "@PROJECT_VERSION@.0"
         END
     END
     BLOCK "VarFileInfo"
