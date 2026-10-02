@@ -38,6 +38,9 @@ public:
     // --- navigation -----------------------------------------------------
     void loadUrl(const QUrl& url);
     void loadInput(const QString& text, bool isSearch);
+    // Opens a local file the user dropped onto the page. Goes through the same
+    // navigation path, with a one-shot file:// permission.
+    void openLocalFile(const QUrl& url);
     void showStartPage();
     void goBack();
     void goForward();
@@ -84,6 +87,9 @@ private:
     HistoryStore* m_history = nullptr;
     QString m_lastTitle;
     QUrl m_lastUrl;
+    // Window state to restore when a page leaves full screen (so a maximized
+    // window comes back maximized and a normal one comes back normal).
+    Qt::WindowStates m_stateBeforeFullScreen = Qt::WindowNoState;
 };
 
 }  // namespace yozora

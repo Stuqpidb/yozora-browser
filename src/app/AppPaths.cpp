@@ -59,6 +59,11 @@ QString AppPaths::pinnedSitesPath()
     return stateDir() + QStringLiteral("/pinned-sites.json");
 }
 
+QString AppPaths::sessionPath()
+{
+    return stateDir() + QStringLiteral("/session.json");
+}
+
 QString AppPaths::legacyHomeLayoutPath()
 {
     return stateDir() + QStringLiteral("/home.json");

@@ -222,6 +222,12 @@ bool WebPage::acceptNavigationRequest(const QUrl& url, NavigationType type, bool
     // is only allowed when the user typed it (or navigated back to it), never
     // when a page linked to it, redirected to it or framed it.
     if (scheme == QLatin1String("file")) {
+        // A file the user dropped onto the page is user-initiated too, so the
+        // one-shot flag allows it and is then cleared.
+        if (m_allowFileNavigation && isMainFrame) {
+            m_allowFileNavigation = false;
+            return QWebEnginePage::acceptNavigationRequest(url, type, isMainFrame);
+        }
         const bool userInitiated =
             (type == NavigationTypeTyped || type == NavigationTypeBackForward);
         if (userInitiated && isMainFrame) {

@@ -325,7 +325,14 @@ void HomePage::buildLayout()
     m_root->setSpacing(0);
     m_root->addStretch(1);
 
-    m_wordmark = new QLabel(QStringLiteral("✦  YOZORA"), this);
+    m_logo = new QLabel(this);
+    m_logo->setObjectName(QStringLiteral("heroLogo"));
+    m_logo->setAlignment(Qt::AlignCenter);
+    m_logo->setPixmap(QPixmap(QStringLiteral(":/icons/yozora.png"))
+                          .scaled(96, 96, Qt::KeepAspectRatio, Qt::SmoothTransformation));
+    m_root->addWidget(m_logo, 0, Qt::AlignHCenter);
+
+    m_wordmark = new QLabel(QStringLiteral("YOZORA"), this);
     m_wordmark->setObjectName(QStringLiteral("heroWordmark"));
     m_wordmark->setAlignment(Qt::AlignCenter);
     QFont wordFont(Theme::displayFamily());

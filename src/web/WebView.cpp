@@ -7,11 +7,14 @@
 #include <QClipboard>
 #include <QColor>
 #include <QContextMenuEvent>
+#include <QDragEnterEvent>
+#include <QDropEvent>
 #include <QFile>
 #include <QFileDialog>
 #include <QFileInfo>
 #include <QGuiApplication>
 #include <QMenu>
+#include <QMimeData>
 #include <QNetworkAccessManager>
 #include <QNetworkReply>
 #include <QNetworkRequest>
@@ -73,6 +76,19 @@ void WebView::setScrollMode(Settings::ScrollMode mode)
 
 void WebView::wheelEvent(QWheelEvent* event)
 {
+    // Ctrl+wheel zooms. The engine would do this itself, but doing it here lets
+    // the shell show a percentage indicator, the way Chrome and Firefox do.
+    if ((event->modifiers() & Qt::ControlModifier) && !event->angleDelta().isNull()) {
+        const int steps = event->angleDelta().y() / 120;
+        if (steps != 0) {
+            const qreal factor = qBound(0.25, zoomFactor() * std::pow(1.1, steps), 5.0);
+            setZoomFactor(factor);
+            emit zoomChanged(qRound(factor * 100));
+        }
+        event->accept();
+        return;
+    }
+
     // Only the custom "Fast" mode is handled here. Instant and Smooth are left
     // entirely to the engine.
     if (m_scrollMode != Settings::ScrollMode::Fast) {
@@ -151,6 +167,37 @@ void WebView::contextMenuEvent(QContextMenuEvent* event)
     // for the duration of this event, so the menu is built synchronously.
     buildContextMenu(lastContextMenuRequest(), mapToGlobal(event->pos()));
     event->accept();
+}
+
+void WebView::dragEnterEvent(QDragEnterEvent* event)
+{
+    // A local file dragged onto the page is the user asking to open it. The
+    // shell is told, and decides how to navigate; the page never sees it.
+    if (event->mimeData()->hasUrls()) {
+        const QList<QUrl> urls = event->mimeData()->urls();
+        for (const QUrl& url : urls) {
+            if (url.isLocalFile()) {
+                event->acceptProposedAction();
+                return;
+            }
+        }
+    }
+    QWebEngineView::dragEnterEvent(event);
+}
+
+void WebView::dropEvent(QDropEvent* event)
+{
+    if (event->mimeData()->hasUrls()) {
+        const QList<QUrl> urls = event->mimeData()->urls();
+        for (const QUrl& url : urls) {
+            if (url.isLocalFile()) {
+                emit fileDropped(url);
+                event->acceptProposedAction();
+                return;
+            }
+        }
+    }
+    QWebEngineView::dropEvent(event);
 }
 
 void WebView::buildContextMenu(QWebEngineContextMenuRequest* request, const QPoint& globalPos)

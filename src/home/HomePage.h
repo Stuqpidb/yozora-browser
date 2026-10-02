@@ -85,6 +85,7 @@ private:
     [[nodiscard]] int topSpacing() const;
 
     QVBoxLayout* m_root = nullptr;
+    QLabel* m_logo = nullptr;
     QLabel* m_wordmark = nullptr;
     QLabel* m_tagline = nullptr;
     GlassField* m_field = nullptr;

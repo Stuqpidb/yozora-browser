@@ -5,6 +5,7 @@
 #include "core/Theme.h"
 #include "ui/Icons.h"
 
+#include <QContextMenuEvent>
 #include <QFontMetrics>
 #include <QLinearGradient>
 #include <QMouseEvent>
@@ -24,6 +25,7 @@ constexpr int kMinTabWidth = 110;
 constexpr int kMaxTabWidth = 220;
 constexpr int kCloseSize = 18;
 constexpr int kPlusWidth = 34;
+constexpr int kPinnedTabWidth = 44;
 
 QColor withAlphaColor(const QColor& color, int alpha)
 {
@@ -120,6 +122,15 @@ void TabStrip::setTabs(const QList<Tab>& tabs)
     update();
 }
 
+void TabStrip::setPinned(int index, bool pinned)
+{
+    if (index < 0 || index >= m_tabs.size()) {
+        return;
+    }
+    m_tabs[index].pinned = pinned;
+    update();
+}
+
 void TabStrip::setCurrentIndex(int index)
 {
     if (index == m_current) {
@@ -139,21 +150,48 @@ QSize TabStrip::minimumSizeHint() const
     return {kBrandWidth + 80, kHeight};
 }
 
+int TabStrip::pinnedTabWidth() const
+{
+    return kPinnedTabWidth;
+}
+
 int TabStrip::tabWidth() const
 {
     const int count = static_cast<int>(m_tabs.size());
     if (count == 0) {
         return 0;
     }
-    const int available = width() - kBrandWidth - kPlusWidth - 12 - kGap * (count - 1);
-    return qBound(kMinTabWidth, available / count, kMaxTabWidth);
+    const int pinnedWidth = pinnedTabWidth();
+    int pinnedCount = 0;
+    for (const Tab& tab : m_tabs) {
+        if (tab.pinned) {
+            ++pinnedCount;
+        }
+    }
+    const int unpinned = count - pinnedCount;
+    const int reserved = pinnedCount * (pinnedWidth + kGap);
+    const int available =
+        width() - kBrandWidth - kPlusWidth - 12 - kGap * (count - 1) - reserved;
+    if (unpinned <= 0) {
+        return 0;
+    }
+    return qBound(kMinTabWidth, available / unpinned, kMaxTabWidth);
 }
 
 QRect TabStrip::tabRect(int index) const
 {
-    const int w = tabWidth();
-    const int x = kBrandWidth + index * (w + kGap);
-    return QRect(x, kTabTop, w, kTabHeight);
+    const int pinnedWidth = pinnedTabWidth();
+    const int unpinnedWidth = tabWidth();
+    int x = kBrandWidth;
+    for (int i = 0; i < m_tabs.size(); ++i) {
+        const bool pinned = m_tabs.at(i).pinned;
+        const int w = pinned ? pinnedWidth : unpinnedWidth;
+        if (i == index) {
+            return QRect(x, kTabTop, w, kTabHeight);
+        }
+        x += w + kGap;
+    }
+    return QRect(x, kTabTop, unpinnedWidth, kTabHeight);
 }
 
 QRect TabStrip::closeRect(int index) const
@@ -165,8 +203,9 @@ QRect TabStrip::closeRect(int index) const
 
 QRect TabStrip::plusRect() const
 {
-    const int x = kBrandWidth + static_cast<int>(m_tabs.size()) * (tabWidth() + kGap);
-    return QRect(x + 2, kTabTop + 1, 28, 28);
+    const QRect last = m_tabs.isEmpty() ? QRect(kBrandWidth, kTabTop, 0, kTabHeight)
+                                        : tabRect(static_cast<int>(m_tabs.size()) - 1);
+    return QRect(last.right() + kGap + 2, kTabTop + 1, 28, 28);
 }
 
 int TabStrip::tabAt(const QPoint& pos) const
@@ -182,7 +221,13 @@ int TabStrip::tabAt(const QPoint& pos) const
 int TabStrip::dropIndexFor(const QPoint& pos) const
 {
     const int count = static_cast<int>(m_tabs.size());
-    for (int i = 0; i < count; ++i) {
+    // Pinned tabs keep the left end; an unpinned tab can never be dropped before
+    // them, so the search starts after the pinned run.
+    int firstUnpinned = 0;
+    while (firstUnpinned < count && m_tabs.at(firstUnpinned).pinned) {
+        ++firstUnpinned;
+    }
+    for (int i = firstUnpinned; i < count; ++i) {
         const QRect rect = tabRect(i);
         if (pos.x() < rect.center().x()) {
             return i;
@@ -199,19 +244,30 @@ void TabStrip::paintEvent(QPaintEvent*)
     painter.setRenderHint(QPainter::Antialiasing, true);
     painter.fillRect(rect(), QColor(c.background));
 
-    // Brand: a star and the wordmark in the accent gradient.
+    // Brand: the real Yozora mark and the wordmark in the accent gradient. The
+    // mark used to be a Unicode four-point star, which is not the product's logo
+    // and read as a glyph from some other app.
     QFont brandFont = font();
     brandFont.setPointSizeF(12.5);
     brandFont.setWeight(QFont::DemiBold);
     brandFont.setLetterSpacing(QFont::AbsoluteSpacing, 1.6);
     painter.setFont(brandFont);
-    const QRect brandRect(16, 0, kBrandWidth - 20, height());
+
+    constexpr int kMarkSize = 20;
+    const int markY = (height() - kMarkSize) / 2;
+    const QRect markRect(16, markY, kMarkSize, kMarkSize);
+    const QPixmap mark(QStringLiteral(":/icons/yozora.png"));
+    if (!mark.isNull()) {
+        painter.drawPixmap(markRect, mark.scaled(markRect.size(), Qt::KeepAspectRatio,
+                                                 Qt::SmoothTransformation));
+    }
+
+    const QRect brandRect(16 + kMarkSize + 8, 0, kBrandWidth - 20, height());
     QLinearGradient gradient(brandRect.topLeft(), brandRect.topRight());
     gradient.setColorAt(0.0, QColor(c.accent));
     gradient.setColorAt(1.0, QColor(c.accent2));
     painter.setPen(QPen(QBrush(gradient), 1));
-    painter.drawText(brandRect, Qt::AlignVCenter | Qt::AlignLeft,
-                     QStringLiteral("\u2726  YOZORA"));
+    painter.drawText(brandRect, Qt::AlignVCenter | Qt::AlignLeft, QStringLiteral("YOZORA"));
 
     // Tabs.
     for (int i = 0; i < static_cast<int>(m_tabs.size()); ++i) {
@@ -253,8 +309,12 @@ void TabStrip::paintEvent(QPaintEvent*)
             painter.drawRoundedRect(marker, 1, 1);
         }
 
-        // Favicon or a placeholder dot.
-        QRect iconRect(tab.left() + 11, tab.top() + (tab.height() - 16) / 2, 16, 16);
+        const bool pinned = m_tabs.at(i).pinned;
+
+        // Favicon or a placeholder dot. A pinned tab shows only the icon,
+        // centred: that is what makes it narrow and recognisable.
+        const int iconY = tab.top() + (tab.height() - 16) / 2;
+        QRect iconRect(pinned ? tab.center().x() - 8 : tab.left() + 11, iconY, 16, 16);
         const QIcon icon = m_tabs.at(i).icon;
         if (!icon.isNull()) {
             icon.paint(&painter, iconRect, Qt::AlignCenter, QIcon::Normal);
@@ -264,19 +324,21 @@ void TabStrip::paintEvent(QPaintEvent*)
             painter.drawEllipse(iconRect.center(), 3, 3);
         }
 
-        const int textLeft = iconRect.right() + 8;
-        const int textRight = tab.right() - kCloseSize - 12;
-        QFont tabFont = font();
-        tabFont.setPointSizeF(12.0);
-        painter.setFont(tabFont);
-        painter.setPen(selected ? QColor(c.text) : QColor(c.textMuted));
-        const QString title = QFontMetrics(tabFont).elidedText(
-            m_tabs.at(i).title, Qt::ElideRight, qMax(10, textRight - textLeft));
-        painter.drawText(QRect(textLeft, tab.top(), textRight - textLeft, tab.height()),
-                         Qt::AlignVCenter | Qt::AlignLeft, title);
+        if (!pinned) {
+            const int textLeft = iconRect.right() + 8;
+            const int textRight = tab.right() - kCloseSize - 12;
+            QFont tabFont = font();
+            tabFont.setPointSizeF(12.0);
+            painter.setFont(tabFont);
+            painter.setPen(selected ? QColor(c.text) : QColor(c.textMuted));
+            const QString title = QFontMetrics(tabFont).elidedText(
+                m_tabs.at(i).title, Qt::ElideRight, qMax(10, textRight - textLeft));
+            painter.drawText(QRect(textLeft, tab.top(), textRight - textLeft, tab.height()),
+                             Qt::AlignVCenter | Qt::AlignLeft, title);
+        }
 
-        // Close button.
-        if (selected || hover > 0.01) {
+        // Close button. Pinned tabs have none: the icon is the whole tab.
+        if (!pinned && (selected || hover > 0.01)) {
             const QRect close = closeRect(i);
             if (hover > 0.5 && m_closeHover) {
                 painter.setPen(Qt::NoPen);
@@ -333,7 +395,8 @@ void TabStrip::mousePressEvent(QMouseEvent* event)
         return;
     }
 
-    if (closeRect(index).contains(pos) && (index == m_current || index == m_hover)) {
+    if (!m_tabs.at(index).pinned && closeRect(index).contains(pos)
+        && (index == m_current || index == m_hover)) {
         emit closeRequested(index);
         return;
     }
@@ -368,7 +431,9 @@ void TabStrip::mouseMoveEvent(QMouseEvent* event)
         changed = true;
     }
 
-    if (m_pressed && (pos - m_pressPos).manhattanLength() > 8) {
+    if (m_pressed && (pos - m_pressPos).manhattanLength() > 8
+        && !m_tabs.at(qBound(0, m_pressIndex, static_cast<int>(m_tabs.size()) - 1)).pinned) {
+        // A pinned tab is not draggable: it is pinned to its place by definition.
         m_dragging = true;
         m_dragIndex = m_pressIndex;
     }
@@ -415,6 +480,15 @@ void TabStrip::wheelEvent(QWheelEvent* event)
     const int next = m_current + direction;
     if (next >= 0 && next < static_cast<int>(m_tabs.size())) {
         emit currentChanged(next);
+    }
+    event->accept();
+}
+
+void TabStrip::contextMenuEvent(QContextMenuEvent* event)
+{
+    const int index = tabAt(event->pos());
+    if (index >= 0) {
+        emit contextMenuRequested(index, event->globalPos());
     }
     event->accept();
 }

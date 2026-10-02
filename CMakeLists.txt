@@ -1,7 +1,7 @@
 cmake_minimum_required(VERSION 3.21)
 
 project(Yozora
-    VERSION 0.2.4
+    VERSION 0.2.5
     DESCRIPTION "Yozora Browser - a native desktop browser built with C++ and Qt WebEngine"
     HOMEPAGE_URL "https://github.com/Stuqpidb/yozora-browser"
     LANGUAGES CXX
@@ -123,6 +123,8 @@ add_library(yozora_core STATIC
     src/ui/SideBar.h
     src/ui/ShieldDialog.cpp
     src/ui/ShieldDialog.h
+    src/ui/DownloadsDialog.cpp
+    src/ui/DownloadsDialog.h
     src/ui/TabStrip.cpp
     src/ui/TabStrip.h
     src/ui/TabWidget.cpp

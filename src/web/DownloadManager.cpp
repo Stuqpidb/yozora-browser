@@ -134,6 +134,14 @@ void DownloadManager::onDownloadRequested(QWebEngineDownloadRequest* request)
 
     m_files.insert(request, QDir(directory).filePath(fileName));
 
+    DownloadRecord record;
+    record.fileName = fileName;
+    record.path = QDir(directory).filePath(fileName);
+    record.totalBytes = request->totalBytes();
+    record.state = DownloadRecord::State::Active;
+    m_records.prepend(record);
+    emit recordsChanged();
+
     connect(request, &QWebEngineDownloadRequest::stateChanged, this,
             [this, request](QWebEngineDownloadRequest::DownloadState) {
                 onStateChanged(request);
@@ -161,6 +169,8 @@ void DownloadManager::onStateChanged(QWebEngineDownloadRequest* request)
         case QWebEngineDownloadRequest::DownloadCompleted: {
             m_label->setText(tr("%1 - Download complete").arg(name));
             m_progress->setVisible(false);
+            markRecord(path, DownloadRecord::State::Completed, request->receivedBytes(),
+                       request->totalBytes());
             emit downloadFinished(path);
             m_files.remove(request);
             request->deleteLater();
@@ -172,6 +182,8 @@ void DownloadManager::onStateChanged(QWebEngineDownloadRequest* request)
             const QString reason = request->interruptReasonString();
             m_label->setText(tr("%1 - Download failed").arg(name));
             m_progress->setVisible(false);
+            markRecord(path, DownloadRecord::State::Failed, request->receivedBytes(),
+                       request->totalBytes());
             emit downloadFailed(name, reason);
             m_files.remove(request);
             request->deleteLater();
@@ -188,6 +200,14 @@ void DownloadManager::onReceivedBytesChanged(QWebEngineDownloadRequest* request)
     if (m_progress->maximum() > 0) {
         m_progress->setValue(static_cast<int>(request->receivedBytes()));
     }
+    const QString path = m_files.value(request);
+    for (DownloadRecord& record : m_records) {
+        if (record.path == path) {
+            record.receivedBytes = request->receivedBytes();
+            emit recordsChanged();
+            break;
+        }
+    }
 }
 
 void DownloadManager::onTotalBytesChanged(QWebEngineDownloadRequest* request)
@@ -196,6 +216,14 @@ void DownloadManager::onTotalBytesChanged(QWebEngineDownloadRequest* request)
     if (total > 0) {
         m_progress->setRange(0, 100);
         m_progress->setValue(static_cast<int>(request->receivedBytes() * 100 / total));
+    }
+    const QString path = m_files.value(request);
+    for (DownloadRecord& record : m_records) {
+        if (record.path == path) {
+            record.totalBytes = total;
+            emit recordsChanged();
+            break;
+        }
     }
 }
 
@@ -216,6 +244,29 @@ void DownloadManager::resetBar()
     m_bar->setVisible(false);
     m_label->clear();
     m_progress->setValue(0);
+}
+
+void DownloadManager::markRecord(const QString& path, DownloadRecord::State state, qint64 received,
+                                 qint64 total)
+{
+    for (DownloadRecord& record : m_records) {
+        if (record.path == path) {
+            record.state = state;
+            record.receivedBytes = received;
+            record.totalBytes = total;
+            emit recordsChanged();
+            return;
+        }
+    }
+}
+
+void DownloadManager::clearHistory()
+{
+    // Active downloads stay: clearing the history must not cancel them.
+    m_records.removeIf([](const DownloadRecord& record) {
+        return record.state != DownloadRecord::State::Active;
+    });
+    emit recordsChanged();
 }
 
 void DownloadManager::openFile(const QString& path, QWidget* parent)

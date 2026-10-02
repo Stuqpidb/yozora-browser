@@ -7,7 +7,7 @@ Linux. It is a real C++ desktop application with its own interface, not a web
 site in a wrapper and not an Electron app. Pages are rendered by Chromium
 through Qt WebEngine.
 
-> **Status: 0.2.4.** Windows installers are published on the
+> **Status: 0.2.5.** Windows installers are published on the
 > [releases page](https://github.com/Stuqpidb/yozora-browser/releases). Linux is
 > not packaged yet. The interface is still moving; see the roadmap below.
 
@@ -15,13 +15,18 @@ through Qt WebEngine.
 
 ## What works today
 
-- Tabs: create, close, reorder, restore last closed (`Ctrl+Shift+T`)
+- Tabs: create, close, reorder, restore last closed (`Ctrl+Shift+T`), duplicate
+  and pin (right-click a tab)
 - Navigation: back, forward, reload, stop, with buttons that disable themselves
-- Address bar: URL or search query, `Ctrl+L` to focus
+- Address bar: URL or search query, `Ctrl+L` to focus; `Ctrl+wheel` zooms with an
+  on-screen percentage
 - A left rail that can be hidden (`Ctrl+B`) and stays that way across restarts
 - Yozora start page: search over a generated night sky, with pinned sites
 - History (`Ctrl+H`) and bookmarks (`Ctrl+Shift+O`) as searchable lists, with
   relative times and per-entry removal
+- Downloads window with per-file progress, open, and show-in-folder
+- Session restore on start, and recovery of the open tabs after a crash
+- Optional background update checks (off by default; see the privacy notes)
 - Page context menu: open link, copy link, save image, clipboard actions
 - DevTools in a separate window (`F12`)
 - Downloads to a configurable folder, with progress and "open" / "show folder"

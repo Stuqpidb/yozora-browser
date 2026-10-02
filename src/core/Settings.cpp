@@ -27,6 +27,7 @@ constexpr auto kKeyWindowGeometry = "window/geometry";
 constexpr auto kKeyWindowState = "window/state";
 constexpr auto kKeySideBarCollapsed = "window/sidebar_collapsed";
 constexpr auto kKeyRestoreSession = "session/restore_on_start";
+constexpr auto kKeyBackgroundUpdates = "updates/background";
 
 constexpr auto kKeyBlockThirdPartyCookies = "privacy/block_third_party_cookies";
 constexpr auto kKeyKeepCookiesOnExit = "privacy/keep_cookies_on_exit";
@@ -226,6 +227,22 @@ void Settings::setRestoreSessionOnStart(bool restore)
     d->store.setValue(QLatin1String(kKeyRestoreSession), restore);
 }
 
+bool Settings::backgroundUpdates() const
+{
+    // Opt-in on purpose: the privacy notes promise no unsolicited network
+    // traffic, so this has to be turned on deliberately.
+    return d->store.value(QLatin1String(kKeyBackgroundUpdates), false).toBool();
+}
+
+void Settings::setBackgroundUpdates(bool enabled)
+{
+    if (backgroundUpdates() == enabled) {
+        return;
+    }
+    d->store.setValue(QLatin1String(kKeyBackgroundUpdates), enabled);
+    emit backgroundUpdatesChanged();
+}
+
 // ---------------------------------------------------------------------------
 // Privacy
 // ---------------------------------------------------------------------------
@@ -392,6 +409,7 @@ void Settings::resetToDefaults()
     emit doNotTrackChanged();
     emit notificationsEnabledChanged();
     emit webrtcPolicyChanged();
+    emit backgroundUpdatesChanged();
 }
 
 }  // namespace yozora

@@ -654,6 +654,20 @@ QWidget* SettingsDialog::buildAboutSection()
     m_updateStatus->setWordWrap(true);
     updatesLayout->addWidget(m_checkUpdates);
     updatesLayout->addWidget(m_updateStatus);
+
+    m_backgroundUpdates = new QCheckBox(tr("Check for updates in the background"), updates);
+    updatesLayout->addWidget(m_backgroundUpdates);
+    updatesLayout->addWidget(hint(tr("Off by default: Yozora does not contact the network "
+                                     "unless you ask. When on, it checks once shortly after "
+                                     "start and then occasionally, and only ever talks to "
+                                     "GitHub Releases."),
+                                  updates));
+    connect(m_backgroundUpdates, &QCheckBox::toggled, this, [this](bool on) {
+        if (m_settings && !m_loading) {
+            m_settings->setBackgroundUpdates(on);
+        }
+    });
+
     layout->addWidget(updates);
 
     connect(m_checkUpdates, &QPushButton::clicked, this, [this] {
@@ -707,6 +721,8 @@ void SettingsDialog::loadFromSettings()
 
         m_scrollMode->setCurrentIndex(
             m_scrollMode->findData(static_cast<int>(m_settings->scrollMode())));
+
+        m_backgroundUpdates->setChecked(m_settings->backgroundUpdates());
     }
 
     if (m_profile) {

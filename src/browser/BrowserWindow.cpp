@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: MIT
 #include "browser/BrowserWindow.h"
 
+#include "app/AppPaths.h"
 #include "browser/BrowserTab.h"
 #include "core/BookmarkStore.h"
 #include "core/Glass.h"
@@ -14,6 +15,7 @@
 #include "privacy/RequestInterceptor.h"
 #include "ui/AddressBar.h"
 #include "ui/ClearBrowsingDataDialog.h"
+#include "ui/DownloadsDialog.h"
 #include "ui/LibraryDialog.h"
 #include "ui/NavigationBar.h"
 #include "ui/SettingsDialog.h"
@@ -35,14 +37,19 @@
 #include <QDialog>
 #include <QFileInfo>
 #include <QHBoxLayout>
+#include <QJsonArray>
+#include <QJsonDocument>
+#include <QJsonObject>
 #include <QListWidget>
 #include <QMenu>
 #include <QMessageBox>
 #include <QPointer>
+#include <QSaveFile>
 #include <QShortcut>
 #include <QShowEvent>
 #include <QStackedWidget>
 #include <QStatusBar>
+#include <QTimer>
 #include <QVBoxLayout>
 #include <QWebEngineView>
 
@@ -139,9 +146,8 @@ void BrowserWindow::buildUi()
     });
     connect(m_sideBar, &SideBar::historyRequested, this, [this] { showLibrary(false); });
     connect(m_sideBar, &SideBar::bookmarksRequested, this, [this] { showLibrary(true); });
-    connect(m_sideBar, &SideBar::downloadsRequested, this, [this] {
-        QDesktopServices::openUrl(QUrl::fromLocalFile(m_settings->downloadDirectory()));
-    });
+    connect(m_sideBar, &SideBar::downloadsRequested, this,
+            &BrowserWindow::showDownloadsManager);
     connect(m_sideBar, &SideBar::privateRequested, this, &BrowserWindow::openPrivateWindow);
     connect(m_sideBar, &SideBar::settingsRequested, this, &BrowserWindow::showSettings);
     // A rail the user hid stays hidden, and a rail they brought back stays
@@ -162,16 +168,25 @@ void BrowserWindow::buildUi()
             [this](const QString& reason, ReleaseError) {
                 // A failure is worth a dialog: the usual causes (no network, no
                 // public release) need a sentence, not a line in a status strip
-                // that is gone before it has been read.
+                // that is gone before it has been read. An automatic check stays
+                // silent instead of interrupting whatever the user is doing.
+                if (m_silentUpdateCheck) {
+                    m_silentUpdateCheck = false;
+                    return;
+                }
                 showUpdateProblem(reason);
             });
     connect(m_updateChecker, &UpdateChecker::updateCheckFinished, this, [this](bool hasUpdate) {
-        if (!hasUpdate) {
+        if (!hasUpdate && !m_silentUpdateCheck) {
             showStatusMessage(tr("Yozora is up to date"));
         }
+        m_silentUpdateCheck = false;
     });
     connect(m_updateChecker, &UpdateChecker::updateAvailable, this,
-            [this](const ReleaseInfo& info) { showUpdateOffer(info); });
+            [this](const ReleaseInfo& info) {
+                m_silentUpdateCheck = false;
+                showUpdateOffer(info);
+            });
     connect(m_updateChecker, &UpdateChecker::updateDownloadStarted, this,
             [this](const QString& fileName, qint64 total) {
                 m_updateDialog->beginDownload(fileName, total);
@@ -198,6 +213,8 @@ void BrowserWindow::buildUi()
             selectTab(m_tabs.indexOf(current));
         }
     });
+    connect(m_tabStrip, &TabStrip::contextMenuRequested, this,
+            &BrowserWindow::showTabContextMenu);
 
     connect(m_navBar, &NavigationBar::backRequested, this, &BrowserWindow::goBack);
     connect(m_navBar, &NavigationBar::forwardRequested, this, &BrowserWindow::goForward);
@@ -230,6 +247,31 @@ void BrowserWindow::buildUi()
             [this](const QString& name, const QString&) {
                 showStatusMessage(tr("Download of %1 failed").arg(name));
             });
+
+    // Automatic update checks, off unless the user enabled them. The first runs
+    // shortly after start (so it does not compete with loading the first page),
+    // then every six hours.
+    m_updateTimer = new QTimer(this);
+    m_updateTimer->setInterval(6 * 60 * 60 * 1000);
+    connect(m_updateTimer, &QTimer::timeout, this, [this] {
+        m_silentUpdateCheck = true;
+        m_updateChecker->checkNow();
+    });
+    const auto armUpdateTimer = [this] {
+        if (m_settings->backgroundUpdates()) {
+            m_updateTimer->start();
+            QTimer::singleShot(30000, this, [this] {
+                if (m_settings->backgroundUpdates()) {
+                    m_silentUpdateCheck = true;
+                    m_updateChecker->checkNow();
+                }
+            });
+        } else {
+            m_updateTimer->stop();
+        }
+    };
+    armUpdateTimer();
+    connect(m_settings, &Settings::backgroundUpdatesChanged, this, armUpdateTimer);
 }
 
 void BrowserWindow::buildShortcuts()
@@ -263,6 +305,18 @@ void BrowserWindow::buildShortcuts()
     add(sequence("Ctrl+R"), [this] { reload(); });
     add(sequence("F5"), [this] { reload(); });
     add(sequence("Esc"), [this] {
+        // Leaving a video's full screen is the first thing Esc should do; the
+        // page is told too, so its own full-screen state does not get stuck.
+        if (isFullScreen()) {
+            setWindowState(windowState() & ~Qt::WindowFullScreen);
+            if (auto* tab = currentTab()) {
+                if (auto* view = tab->view()) {
+                    view->page()->runJavaScript(
+                        QStringLiteral("document.fullscreenElement && document.exitFullscreen()"));
+                }
+            }
+            return;
+        }
         if (m_navBar->addressBar()->hasFocus()) {
             m_navBar->addressBar()->clear();
             if (auto* tab = currentTab()) {
@@ -315,6 +369,173 @@ void BrowserWindow::buildShortcuts()
 // ---------------------------------------------------------------------------
 // Tabs
 // ---------------------------------------------------------------------------
+
+void BrowserWindow::duplicateTab(int index)
+{
+    if (index < 0 || index >= m_tabs.size()) {
+        return;
+    }
+    BrowserTab* source = m_tabs.at(index);
+    const QUrl url = source->url();
+    // The duplicate opens next to its source, not at the end, and is inserted
+    // just after it so the two stay together.
+    BrowserTab* tab = new BrowserTab(m_profile->profile(), m_settings, m_history, this);
+    connectTab(tab);
+    m_pages->addWidget(tab);
+    const int at = qMin(index + 1, static_cast<int>(m_tabs.size()));
+    m_tabs.insert(at, tab);
+    if (source->isStartPage()) {
+        tab->showStartPage();
+    } else if (url.isValid()) {
+        tab->loadUrl(url);
+    }
+    refreshTabStrip();
+    selectTab(at);
+}
+
+void BrowserWindow::togglePinTab(int index)
+{
+    if (index < 0 || index >= m_tabs.size()) {
+        return;
+    }
+    BrowserTab* tab = m_tabs.at(index);
+    const bool wasPinned = m_pinnedTabs.contains(tab);
+    if (wasPinned) {
+        m_pinnedTabs.remove(tab);
+    } else {
+        m_pinnedTabs.insert(tab);
+    }
+
+    // Pinned tabs sit at the front, unpinned after them; the relative order
+    // within each group is preserved. Rebuilt as a stable partition.
+    QList<BrowserTab*> pinned;
+    QList<BrowserTab*> rest;
+    for (BrowserTab* t : m_tabs) {
+        if (m_pinnedTabs.contains(t)) {
+            pinned.append(t);
+        } else {
+            rest.append(t);
+        }
+    }
+    QList<BrowserTab*> ordered = pinned;
+    ordered += rest;
+    const int newIndex = ordered.indexOf(tab);
+    m_tabs = ordered;
+
+    refreshTabStrip();
+    selectTab(newIndex);
+}
+
+void BrowserWindow::showTabContextMenu(int index, const QPoint& globalPos)
+{
+    if (index < 0 || index >= m_tabs.size()) {
+        return;
+    }
+    BrowserTab* tab = m_tabs.at(index);
+    const bool pinned = m_pinnedTabs.contains(tab);
+
+    QMenu menu(this);
+    QAction* duplicate = menu.addAction(tr("Duplicate tab"));
+    QAction* pin = menu.addAction(pinned ? tr("Unpin tab") : tr("Pin tab"));
+    menu.addSeparator();
+    QAction* close = menu.addAction(tr("Close tab\tCtrl+W"));
+    close->setEnabled(!pinned);
+
+    QAction* chosen = menu.exec(globalPos);
+    if (chosen == duplicate) {
+        duplicateTab(index);
+    } else if (chosen == pin) {
+        togglePinTab(index);
+    } else if (chosen == close) {
+        closeTab(index);
+    }
+}
+
+// ---------------------------------------------------------------------------
+// Session
+// ---------------------------------------------------------------------------
+
+void BrowserWindow::scheduleSessionSave()
+{
+    if (m_private) {
+        return;
+    }
+    if (!m_sessionTimer) {
+        m_sessionTimer = new QTimer(this);
+        m_sessionTimer->setSingleShot(true);
+        connect(m_sessionTimer, &QTimer::timeout, this, [this] { writeSession(false); });
+    }
+    // Coalesce the flurry of changes that come with opening or closing tabs.
+    m_sessionTimer->start(1000);
+}
+
+void BrowserWindow::writeSession(bool clean)
+{
+    if (m_private) {
+        return;
+    }
+    AppPaths::ensureCreated();
+
+    const SessionSnapshot snap = snapshot();
+    QJsonObject root;
+    root.insert(QStringLiteral("clean"), clean);
+    root.insert(QStringLiteral("active"), snap.activeIndex);
+    QJsonArray urls;
+    for (const QString& url : snap.urls) {
+        urls.append(url);
+    }
+    root.insert(QStringLiteral("urls"), urls);
+
+    QSaveFile file(AppPaths::sessionPath());
+    if (file.open(QIODevice::WriteOnly | QIODevice::Truncate)) {
+        file.write(QJsonDocument(root).toJson(QJsonDocument::Compact));
+        file.commit();
+    }
+}
+
+bool BrowserWindow::sessionCrashed() const
+{
+    QFile file(AppPaths::sessionPath());
+    if (!file.open(QIODevice::ReadOnly)) {
+        return false;
+    }
+    const QJsonDocument document = QJsonDocument::fromJson(file.readAll());
+    if (!document.isObject()) {
+        return false;
+    }
+    return !document.object().value(QStringLiteral("clean")).toBool(false);
+}
+
+bool BrowserWindow::restoreSession()
+{
+    QFile file(AppPaths::sessionPath());
+    if (!file.open(QIODevice::ReadOnly)) {
+        return false;
+    }
+    const QJsonDocument document = QJsonDocument::fromJson(file.readAll());
+    if (!document.isObject()) {
+        return false;
+    }
+    const QJsonObject root = document.object();
+    const QJsonArray array = root.value(QStringLiteral("urls")).toArray();
+    if (array.isEmpty()) {
+        return false;
+    }
+
+    SessionSnapshot snap;
+    for (const QJsonValue& value : array) {
+        const QString url = value.toString();
+        if (!url.isEmpty()) {
+            snap.urls.append(url);
+        }
+    }
+    if (snap.urls.isEmpty()) {
+        return false;
+    }
+    snap.activeIndex = root.value(QStringLiteral("active")).toInt();
+    restoreSnapshot(snap);
+    return true;
+}
 
 BrowserTab* BrowserWindow::newTab(const QUrl& url, bool foreground)
 {
@@ -412,6 +633,13 @@ void BrowserWindow::connectTab(BrowserTab* tab)
             connect(page, &WebPage::externalProtocolRequested, this,
                     &BrowserWindow::handleExternalProtocol);
         }
+        connect(view, &WebView::zoomChanged, this, [this, tab](int percent) {
+            if (tab == currentTab()) {
+                m_navBar->showMessage(tr("Zoom %1%").arg(percent));
+            }
+        });
+        connect(view, &WebView::fileDropped, this,
+                [tab](const QUrl& url) { tab->openLocalFile(url); });
     }
 }
 
@@ -424,6 +652,7 @@ void BrowserWindow::refreshTabStrip()
         entry.title = tab->title();
         entry.icon = tab->icon();
         entry.tooltip = tab->url().toString();
+        entry.pinned = m_pinnedTabs.contains(tab);
         stripTabs.append(entry);
     }
     m_tabStrip->setTabs(stripTabs);
@@ -443,6 +672,7 @@ void BrowserWindow::closeTab(int index)
     }
 
     BrowserTab* tab = m_tabs.takeAt(index);
+    m_pinnedTabs.remove(tab);
     m_pages->removeWidget(tab);
     tab->deleteLater();
 
@@ -494,6 +724,7 @@ void BrowserWindow::restoreSnapshot(const SessionSnapshot& snap)
         tab->deleteLater();
     }
     m_tabs.clear();
+    m_pinnedTabs.clear();
 
     BrowserTab* active = nullptr;
     for (int i = 0; i < snap.urls.size(); ++i) {
@@ -640,6 +871,12 @@ void BrowserWindow::showClearBrowsingData()
     }
 }
 
+void BrowserWindow::showDownloadsManager()
+{
+    DownloadsDialog dialog(m_downloads, this);
+    dialog.exec();
+}
+
 void BrowserWindow::toggleBookmark()
 {
     auto* tab = currentTab();
@@ -752,6 +989,9 @@ void BrowserWindow::buildMenu(const QPoint& globalPos)
 
     QAction* historyAction = menu.addAction(tr("History\tCtrl+H"));
     connect(historyAction, &QAction::triggered, this, [this] { showLibrary(false); });
+
+    QAction* downloadsAction = menu.addAction(tr("Downloads"));
+    connect(downloadsAction, &QAction::triggered, this, &BrowserWindow::showDownloadsManager);
     menu.addSeparator();
 
     QAction* settingsAction = menu.addAction(tr("Settings...\tCtrl+,"));
@@ -800,6 +1040,7 @@ void BrowserWindow::updateForActiveTab()
     updateBookmarkStar();
     updateShieldState();
     refreshTabStrip();
+    scheduleSessionSave();
 }
 
 void BrowserWindow::updateShieldState()
@@ -870,6 +1111,9 @@ void BrowserWindow::closeEvent(QCloseEvent* event)
     m_closing = true;
     if (!m_private) {
         m_settings->setWindowGeometry(saveGeometry());
+        // A clean exit is what tells the next start that the saved tabs are a
+        // normal session and not the remains of a crash.
+        writeSession(true);
     }
     for (auto& devTools : m_devToolsWindows) {
         if (devTools) {

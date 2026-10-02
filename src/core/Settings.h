@@ -74,6 +74,12 @@ public:
     [[nodiscard]] bool restoreSessionOnStart() const;
     void setRestoreSessionOnStart(bool restore);
 
+    // Whether Yozora may check for updates on its own (once shortly after start,
+    // then periodically). Off by default: the privacy notes promise the browser
+    // does not talk to the network unless asked.
+    [[nodiscard]] bool backgroundUpdates() const;
+    void setBackgroundUpdates(bool enabled);
+
     // --- privacy ----------------------------------------------------------
     // Drop cookies that belong to another site than the one in the address
     // bar. This is the single most effective anti-tracking cookie setting.
@@ -131,6 +137,7 @@ signals:
     void doNotTrackChanged();
     void notificationsEnabledChanged();
     void webrtcPolicyChanged();
+    void backgroundUpdatesChanged();
 
 private:
     class QScopedPointer<class SettingsPrivate> d;

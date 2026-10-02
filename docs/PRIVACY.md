@@ -38,7 +38,7 @@ Every network request the browser itself can make:
 | Downloads | the file's own URL, as clicked | When the user downloads a file. |
 | Error pages | none | They are generated locally as HTML. |
 | Crash handling | none | There is no crash reporter. |
-| Update check | GitHub Releases API | **Only** when the user picks "Check for updates". |
+| Update check | GitHub Releases API | When the user picks "Check for updates", and - only if enabled in Settings - automatically once after start and then occasionally. |
 
 There is no "phone home" on startup, no background ping, no usage counter and
 no installation identifier. Whatever a site itself loads is between you and
@@ -58,6 +58,7 @@ directory:
 | HTTP cache | `profile\` |
 | Settings | the platform's `QSettings` store |
 | Optional tracker blocklist | `privacy\blocklist.txt` |
+| Last open tabs (for session restore / crash recovery) | `state\session.json` |
 | Logs | `logs\` |
 
 Deleting `profile\` resets the browser to a clean state.

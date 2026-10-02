@@ -145,6 +145,10 @@ int main(int argc, char* argv[])
     const QStringList positional = parser.positionalArguments();
     if (!positional.isEmpty()) {
         window.openInFirstTab(QUrl::fromUserInput(positional.first()));
+    } else if (settings.restoreSessionOnStart() || window.sessionCrashed()) {
+        // Reopen the previous tabs: either because the user asked for it, or
+        // because the last run did not exit cleanly and this is a recovery.
+        window.restoreSession();
     }
     window.show();
 

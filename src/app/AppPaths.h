@@ -35,6 +35,10 @@ public:
     [[nodiscard]] static QString historyPath();
     [[nodiscard]] static QString pinnedSitesPath();
 
+    // The last open tabs, plus whether the previous run exited cleanly. Used to
+    // restore the session after a crash (and, if the user asked, on every start).
+    [[nodiscard]] static QString sessionPath();
+
     // The start page used to be a board of movable widgets whose positions were
     // saved to home.json. It is a fixed layout now; the file is only read once,
     // to carry the pinned sites over, and is then left alone.

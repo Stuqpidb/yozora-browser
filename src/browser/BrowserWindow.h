@@ -8,12 +8,14 @@
 #include <QMainWindow>
 #include <QPoint>
 #include <QPointer>
+#include <QSet>
 #include <QStringList>
 #include <QUrl>
 
 class QAction;
 class QShortcut;
 class QStackedWidget;
+class QTimer;
 
 namespace yozora {
 
@@ -50,6 +52,8 @@ public:
     void closeTab(int index);
     void closeCurrentTab();
     void restoreLastClosedTab();
+    void duplicateTab(int index);
+    void togglePinTab(int index);
     [[nodiscard]] int tabCount() const;
     [[nodiscard]] BrowserTab* currentTab() const;
 
@@ -69,6 +73,7 @@ public:
     void showSettings();
     void showClearBrowsingData();
     void showShield();
+    void showDownloadsManager();
 
     [[nodiscard]] bool isPrivateMode() const { return m_private; }
 
@@ -100,6 +105,23 @@ private:
     void updateBookmarkStar();
     void updateShieldState();
     void showLibrary(bool bookmarks);
+    void showTabContextMenu(int index, const QPoint& globalPos);
+
+    // Session persistence. The window writes the open tabs as they change and
+    // flags a clean exit on close, so a crash can be told apart from a normal
+    // quit; restoreSession() is what main() calls when there is something to
+    // bring back.
+    void scheduleSessionSave();
+    void writeSession(bool clean);
+
+public:
+    // True when the previous run did not exit cleanly (a crash or a kill).
+    [[nodiscard]] bool sessionCrashed() const;
+    // Restores the previously saved tabs (used on start). Returns false when
+    // there is nothing to restore.
+    bool restoreSession();
+
+private:
     SessionSnapshot snapshot() const;
     void restoreSnapshot(const SessionSnapshot& snap);
 
@@ -121,10 +143,18 @@ private:
 
     QList<BrowserTab*> m_tabs;
     QList<SessionSnapshot> m_closedTabs;
+    // Tabs the user pinned. Kept here rather than on BrowserTab so a pin
+    // survives the tab's own life cycle handling and is re-applied on restore.
+    QSet<BrowserTab*> m_pinnedTabs;
     QList<QPointer<QWidget>> m_devToolsWindows;
     int m_lastActiveIndex = 0;
     bool m_private = false;
     bool m_closing = false;
+    QTimer* m_sessionTimer = nullptr;
+    QTimer* m_updateTimer = nullptr;
+    // True while an automatic (background) check is running, so its failures and
+    // "up to date" answers stay silent instead of popping dialogs.
+    bool m_silentUpdateCheck = false;
 };
 
 }  // namespace yozora

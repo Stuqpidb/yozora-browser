@@ -5,11 +5,14 @@
 
 #include <QPoint>
 #include <QPointF>
+#include <QUrl>
 #include <QWebEngineView>
 
 class QMenu;
 class QTimer;
 class QWheelEvent;
+class QDragEnterEvent;
+class QDropEvent;
 class QWebEngineProfile;
 class QWebEngineContextMenuRequest;
 
@@ -40,10 +43,17 @@ signals:
     // Raised by context-menu actions that belong to the shell, not the page.
     void newTabRequested(const QUrl& url, bool foreground);
     void statusMessage(const QString& message);
+    // Ctrl+wheel changed the zoom; carries the new percentage so the shell can
+    // show a transient indicator.
+    void zoomChanged(int percent);
+    // A local file was dropped on the view; the shell decides what to open.
+    void fileDropped(const QUrl& url);
 
 protected:
     void contextMenuEvent(QContextMenuEvent* event) override;
     void wheelEvent(QWheelEvent* event) override;
+    void dragEnterEvent(QDragEnterEvent* event) override;
+    void dropEvent(QDropEvent* event) override;
 
 private:
     // Applies the Yozora palette to the widget, so form controls and scrollbars

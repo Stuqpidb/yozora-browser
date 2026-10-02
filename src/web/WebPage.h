@@ -34,6 +34,11 @@ public:
     // Loads `url`, showing Yozora's error page if it cannot be reached.
     void loadUrl(const QUrl& url);
 
+    // Allows the next main-frame file:// navigation, then clears itself. Used
+    // only for a file the user explicitly dropped onto the page; web content
+    // still cannot reach local files.
+    void allowNextFileNavigation() { m_allowFileNavigation = true; }
+
     // Renders the Yozora error document in the current view.
     void showErrorPage(const QUrl& url, int errorDomain, int errorCode, const QString& errorText);
 
@@ -98,6 +103,8 @@ private:
     bool m_errorPageEnabled = true;
     bool m_loading = false;
     bool m_showingErrorPage = false;
+    // One-shot permission for a user-dropped local file; see allowNextFileNavigation().
+    bool m_allowFileNavigation = false;
     int m_progress = 0;
 };
 

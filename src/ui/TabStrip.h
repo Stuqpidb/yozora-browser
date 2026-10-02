@@ -20,6 +20,7 @@ public:
         QString title;
         QIcon icon;
         QString tooltip;
+        bool pinned = false;
     };
 
     explicit TabStrip(QWidget* parent = nullptr);
@@ -29,6 +30,10 @@ public:
     [[nodiscard]] int currentIndex() const { return m_current; }
     [[nodiscard]] int count() const { return static_cast<int>(m_tabs.size()); }
 
+    // Marks a tab as pinned. Pinned tabs are drawn narrow (icon only) and stay
+    // at the left end; the window owns the ordering, the strip only reflects it.
+    void setPinned(int index, bool pinned);
+
     [[nodiscard]] QSize sizeHint() const override;
     [[nodiscard]] QSize minimumSizeHint() const override;
 
@@ -37,6 +42,7 @@ signals:
     void closeRequested(int index);
     void newTabRequested();
     void moveRequested(int from, int to);
+    void contextMenuRequested(int index, const QPoint& globalPos);
 
 protected:
     void paintEvent(QPaintEvent* event) override;
@@ -45,6 +51,7 @@ protected:
     void mouseReleaseEvent(QMouseEvent* event) override;
     void leaveEvent(QEvent* event) override;
     void wheelEvent(QWheelEvent* event) override;
+    void contextMenuEvent(QContextMenuEvent* event) override;
 
 private:
     // The hover highlight of every tab, as an animated 0..1 value each. Keeping
@@ -68,6 +75,7 @@ private:
     [[nodiscard]] int tabAt(const QPoint& pos) const;
     [[nodiscard]] int dropIndexFor(const QPoint& pos) const;
     [[nodiscard]] int tabWidth() const;
+    [[nodiscard]] int pinnedTabWidth() const;
     void startHoverAnimation();
 
     QList<Tab> m_tabs;
