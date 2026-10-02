@@ -100,6 +100,7 @@ private:
 
     QPushButton* m_checkUpdates = nullptr;
     QCheckBox* m_backgroundUpdates = nullptr;
+    QCheckBox* m_hardwareAcceleration = nullptr;
     QLabel* m_updateStatus = nullptr;
     QLabel* m_versionLabel = nullptr;
     QDialogButtonBox* m_buttons = nullptr;

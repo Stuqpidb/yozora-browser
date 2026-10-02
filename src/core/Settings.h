@@ -80,6 +80,13 @@ public:
     [[nodiscard]] bool backgroundUpdates() const;
     void setBackgroundUpdates(bool enabled);
 
+    // Whether Chromium may use the GPU. Off means software rendering, which is
+    // slower but avoids the GPU-compositing flicker ("black checkerboard") some
+    // drivers produce. Needs a restart, so it is read before QApplication.
+    [[nodiscard]] bool hardwareAcceleration() const;
+    void setHardwareAcceleration(bool enabled);
+    [[nodiscard]] static bool bootHardwareAcceleration();
+
     // --- privacy ----------------------------------------------------------
     // Drop cookies that belong to another site than the one in the address
     // bar. This is the single most effective anti-tracking cookie setting.
@@ -138,6 +145,7 @@ signals:
     void notificationsEnabledChanged();
     void webrtcPolicyChanged();
     void backgroundUpdatesChanged();
+    void hardwareAccelerationChanged();
 
 private:
     class QScopedPointer<class SettingsPrivate> d;

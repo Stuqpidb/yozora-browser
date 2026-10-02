@@ -214,7 +214,8 @@ SettingsDialog::SettingsDialog(Settings* settings, WebProfile* profile, QWidget*
          buildScrollingSection()},
         {icons::Shape::Database, tr("Data"), tr("What Yozora keeps on this machine."),
          buildDataSection()},
-        {icons::Shape::Info, tr("About"), tr("Version and licences."), buildAboutSection()},
+        {icons::Shape::Info, tr("About"),
+         tr("Version, updates and graphics."), buildAboutSection()},
     };
     for (const Section& section : sections) {
         auto* item = new QListWidgetItem(section.title, m_nav);
@@ -670,6 +671,25 @@ QWidget* SettingsDialog::buildAboutSection()
 
     layout->addWidget(updates);
 
+    // Graphics. Hardware acceleration is on by default; turning it off switches
+    // Chromium to software rendering, which removes the GPU-compositing flicker
+    // some drivers show but is slower. A restart is required, so the checkbox is
+    // explicit about it.
+    auto* graphics = new QGroupBox(page);
+    auto* graphicsLayout = new QVBoxLayout(graphics);
+    m_hardwareAcceleration = new QCheckBox(tr("Use hardware acceleration (GPU)"), graphics);
+    graphicsLayout->addWidget(m_hardwareAcceleration);
+    graphicsLayout->addWidget(hint(tr("Turn this off if the page flickers or shows black "
+                                      "checkerboard patches while scrolling. Software "
+                                      "rendering is slower. Takes effect after a restart."),
+                                   graphics));
+    connect(m_hardwareAcceleration, &QCheckBox::toggled, this, [this](bool on) {
+        if (m_settings && !m_loading) {
+            m_settings->setHardwareAcceleration(on);
+        }
+    });
+    layout->addWidget(graphics);
+
     connect(m_checkUpdates, &QPushButton::clicked, this, [this] {
         m_checkUpdates->setEnabled(false);
         m_checkUpdates->setText(tr("Checking..."));
@@ -723,6 +743,7 @@ void SettingsDialog::loadFromSettings()
             m_scrollMode->findData(static_cast<int>(m_settings->scrollMode())));
 
         m_backgroundUpdates->setChecked(m_settings->backgroundUpdates());
+        m_hardwareAcceleration->setChecked(m_settings->hardwareAcceleration());
     }
 
     if (m_profile) {

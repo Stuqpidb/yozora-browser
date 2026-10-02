@@ -76,6 +76,14 @@ if(WIN32)
     set(CPACK_NSIS_ENABLE_UNINSTALL_BEFORE_INSTALL ON)
     set(CPACK_NSIS_MODIFY_PATH OFF)
     set(CPACK_NSIS_EXECUTABLES_DIRECTORY ".")
+
+    # Close a running Yozora before anything is copied. Installing over a live
+    # executable leaves a half-updated folder on Windows - some files replaced,
+    # some locked and skipped - which then fails to start with a Qt fail-fast.
+    # The browser saves its session as it goes, so it will offer to reopen the
+    # tabs on the next launch.
+    set(CPACK_NSIS_EXTRA_PREINSTALL_COMMANDS
+        "  nsExec::ExecToLog 'taskkill /IM Yozora.exe /F'\n  nsExec::ExecToLog 'taskkill /IM QtWebEngineProcess.exe /F'\n  Sleep 1500\n")
     # Start menu entry. It takes a bare target name from
     # CPACK_PACKAGE_EXECUTABLES; CPACK_NSIS_MENU_LINKS (which would create an
     # extra sub-folder) is deliberately left unset so the shortcut sits

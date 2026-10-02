@@ -32,16 +32,27 @@ namespace {
 
 // Only one browser instance may own the profile directory at a time; two
 // Chromium processes writing the same cookies database is a corruption bug.
-QLockFile* acquireSingleInstanceLock()
+//
+// A lock left behind by a crash must never block every future start: a finite
+// stale time (and a reclaim attempt) lets the next run take it over once the
+// old process is gone. Setting stale time to 0 - "never stale" - was why a
+// crash used to make Yozora refuse to start until the file was deleted by hand.
+QScopedPointer<QLockFile> acquireSingleInstanceLock()
 {
     const QString lockPath =
         QDir(AppPaths::userDataDir()).filePath(QStringLiteral("instance.lock"));
     auto* lock = new QLockFile(lockPath);
-    lock->setStaleLockTime(0);
-    if (!lock->tryLock(100)) {
-        return nullptr;
+    lock->setStaleLockTime(30000);
+    if (lock->tryLock(300)) {
+        return QScopedPointer<QLockFile>(lock);
     }
-    return lock;
+    // The process that wrote the lock is not answering. Qt may still consider
+    // the lock live (reused PID, access denied); drop it once and retry.
+    if (lock->removeStaleLockFile() && lock->tryLock(300)) {
+        return QScopedPointer<QLockFile>(lock);
+    }
+    delete lock;
+    return QScopedPointer<QLockFile>();
 }
 
 QIcon applicationIcon()
@@ -62,20 +73,30 @@ QIcon applicationIcon()
 // through the Settings object (which needs QApplication).
 void applyStartupPrivacyFlags()
 {
-    const Settings::WebRtcPolicy policy = Settings::bootWebRtcPolicy();
-    if (policy == Settings::WebRtcPolicy::Default) {
-        return;
-    }
-    const char* value = policy == Settings::WebRtcPolicy::PublicInterfaceOnly
-                            ? "default_public_interface_only"
-                            : "disable_non_proxied_udp";
-
     QByteArray flags = qgetenv("QTWEBENGINE_CHROMIUM_FLAGS");
-    if (!flags.isEmpty() && !flags.endsWith(' ')) {
-        flags.append(' ');
+    const auto appendFlag = [&flags](const QByteArray& flag) {
+        if (!flags.isEmpty() && !flags.endsWith(' ')) {
+            flags.append(' ');
+        }
+        flags.append(flag);
+    };
+
+    // Software rendering, when the user turned hardware acceleration off. This
+    // is the fix for the "black checkerboard" some GPU drivers show while
+    // scrolling or compositing; it is slower, so it is opt-in.
+    if (!Settings::bootHardwareAcceleration()) {
+        appendFlag("--disable-gpu");
+        appendFlag("--disable-gpu-compositing");
     }
-    flags.append("--force-webrtc-ip-handling-policy=");
-    flags.append(value);
+
+    const Settings::WebRtcPolicy policy = Settings::bootWebRtcPolicy();
+    if (policy != Settings::WebRtcPolicy::Default) {
+        const char* value = policy == Settings::WebRtcPolicy::PublicInterfaceOnly
+                                ? "default_public_interface_only"
+                                : "disable_non_proxied_udp";
+        appendFlag(QByteArray("--force-webrtc-ip-handling-policy=") + value);
+    }
+
     qputenv("QTWEBENGINE_CHROMIUM_FLAGS", flags);
 }
 
@@ -125,7 +146,6 @@ int main(int argc, char* argv[])
                            "Start menu to use it."));
         return 0;
     }
-    lock->setStaleLockTime(30000);
 
     // A deferred "clear site storage" request runs here, before any profile is
     // created, so Chromium cannot be writing the files that are removed.

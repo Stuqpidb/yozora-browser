@@ -28,6 +28,7 @@ constexpr auto kKeyWindowState = "window/state";
 constexpr auto kKeySideBarCollapsed = "window/sidebar_collapsed";
 constexpr auto kKeyRestoreSession = "session/restore_on_start";
 constexpr auto kKeyBackgroundUpdates = "updates/background";
+constexpr auto kKeyHardwareAcceleration = "appearance/hardware_acceleration";
 
 constexpr auto kKeyBlockThirdPartyCookies = "privacy/block_third_party_cookies";
 constexpr auto kKeyKeepCookiesOnExit = "privacy/keep_cookies_on_exit";
@@ -243,6 +244,31 @@ void Settings::setBackgroundUpdates(bool enabled)
     emit backgroundUpdatesChanged();
 }
 
+bool Settings::hardwareAcceleration() const
+{
+    return d->store.value(QLatin1String(kKeyHardwareAcceleration), true).toBool();
+}
+
+void Settings::setHardwareAcceleration(bool enabled)
+{
+    if (hardwareAcceleration() == enabled) {
+        return;
+    }
+    d->store.setValue(QLatin1String(kKeyHardwareAcceleration), enabled);
+    emit hardwareAccelerationChanged();
+}
+
+bool Settings::bootHardwareAcceleration()
+{
+    // Read before QApplication exists, like the WebRTC policy, because the
+    // decision has to reach Chromium at process start through an environment
+    // variable.
+    const QSettings store(QSettings::NativeFormat, QSettings::UserScope,
+                          QString::fromLatin1(kOrganization),
+                          QString::fromLatin1(kDisplayName));
+    return store.value(QLatin1String(kKeyHardwareAcceleration), true).toBool();
+}
+
 // ---------------------------------------------------------------------------
 // Privacy
 // ---------------------------------------------------------------------------
@@ -410,6 +436,7 @@ void Settings::resetToDefaults()
     emit notificationsEnabledChanged();
     emit webrtcPolicyChanged();
     emit backgroundUpdatesChanged();
+    emit hardwareAccelerationChanged();
 }
 
 }  // namespace yozora
