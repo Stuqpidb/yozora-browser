@@ -16,6 +16,7 @@
 #include "ui/AddressBar.h"
 #include "ui/ClearBrowsingDataDialog.h"
 #include "ui/DownloadsDialog.h"
+#include "ui/Icons.h"
 #include "ui/LibraryDialog.h"
 #include "ui/NavigationBar.h"
 #include "ui/SettingsDialog.h"
@@ -50,6 +51,7 @@
 #include <QStackedWidget>
 #include <QStatusBar>
 #include <QTimer>
+#include <QToolButton>
 #include <QVBoxLayout>
 #include <QWebEngineView>
 
@@ -115,6 +117,20 @@ void BrowserWindow::buildUi()
     root->setSpacing(0);
 
     m_sideBar = new SideBar(central);
+
+    // The reveal handle sits at the very left, before the rail, and is only
+    // visible while the rail is hidden.
+    m_railReveal = new QToolButton(central);
+    m_railReveal->setObjectName(QStringLiteral("railReveal"));
+    m_railReveal->setCursor(Qt::PointingHandCursor);
+    m_railReveal->setToolTip(tr("Show the sidebar (Ctrl+B)"));
+    m_railReveal->setIcon(icons::icon(icons::Shape::ArrowRight, 16,
+                                      QColor(Theme::colors().textMuted)));
+    m_railReveal->setIconSize(QSize(14, 14));
+    m_railReveal->setFixedWidth(16);
+    m_railReveal->setVisible(false);
+    connect(m_railReveal, &QToolButton::clicked, this, [this] { m_sideBar->setCollapsed(false); });
+    root->addWidget(m_railReveal);
     root->addWidget(m_sideBar);
 
     auto* right = new QWidget(central);
@@ -154,10 +170,13 @@ void BrowserWindow::buildUi()
     // visible, for the rest of the session and the next start.
     connect(m_sideBar, &SideBar::collapsedChanged, this, [this](bool collapsed) {
         m_settings->setSideBarCollapsed(collapsed);
+        // The handle only exists so a hidden rail can come back.
+        m_railReveal->setVisible(collapsed);
         update();
     });
     if (m_settings->sideBarCollapsed()) {
         m_sideBar->setCollapsed(true, false);
+        m_railReveal->setVisible(true);
     }
 
     // The update signals are wired once, here, rather than inside buildMenu().
@@ -525,7 +544,9 @@ bool BrowserWindow::restoreSession()
     SessionSnapshot snap;
     for (const QJsonValue& value : array) {
         const QString url = value.toString();
-        if (!url.isEmpty()) {
+        // Skip blank pages saved by an older build: reopening them gives empty
+        // tabs with no purpose.
+        if (!url.isEmpty() && !url.startsWith(QLatin1String("about:blank"))) {
             snap.urls.append(url);
         }
     }
@@ -712,7 +733,15 @@ BrowserWindow::SessionSnapshot BrowserWindow::snapshot() const
 {
     SessionSnapshot snap;
     for (BrowserTab* tab : m_tabs) {
-        snap.urls += tab->openUrls();
+        for (const QString& url : tab->openUrls()) {
+            // A tab that ended up at about:blank (Chromium parks a blocked
+            // navigation there) is empty and not worth reopening; saving it was
+            // why a fresh start could come back with blank tabs.
+            if (url.isEmpty() || url.startsWith(QLatin1String("about:blank"))) {
+                continue;
+            }
+            snap.urls += url;
+        }
     }
     snap.activeIndex = m_tabStrip->currentIndex();
     return snap;

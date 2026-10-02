@@ -120,6 +120,10 @@ int main(int argc, char* argv[])
     app.setOrganizationName(QString::fromLatin1(kOrganization));
     app.setOrganizationDomain(QString::fromLatin1(kDomain));
     app.setDesktopFileName(QStringLiteral("org.yozora.browser"));
+    // The icon lives in the resource bundle, which has to be registered before
+    // the ":/icons/..." paths resolve. Without this the window icon was empty
+    // and the taskbar fell back to whatever it had cached for the executable.
+    AppPaths::ensureResourcesLoaded();
     app.setWindowIcon(applicationIcon());
 
     QCommandLineParser parser;

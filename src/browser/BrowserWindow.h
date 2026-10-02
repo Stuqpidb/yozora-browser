@@ -16,6 +16,7 @@ class QAction;
 class QShortcut;
 class QStackedWidget;
 class QTimer;
+class QToolButton;
 
 namespace yozora {
 
@@ -140,6 +141,9 @@ private:
     BlockingStats m_blockingStats;
 
     SideBar* m_sideBar = nullptr;
+    // A slim handle at the very left edge, shown only while the rail is hidden,
+    // so a collapsed sidebar can always be brought back without knowing Ctrl+B.
+    QToolButton* m_railReveal = nullptr;
     TabStrip* m_tabStrip = nullptr;
     NavigationBar* m_navBar = nullptr;
     QStackedWidget* m_pages = nullptr;

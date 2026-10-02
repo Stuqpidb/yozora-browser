@@ -185,6 +185,16 @@ QToolButton#railButton {
 QToolButton#railButton:hover { background: %SURFACE_HOVER%; color: %TEXT%; }
 QToolButton#railButton:checked { background: %SURFACE_ACTIVE%; color: %TEXT%; }
 
+/* The slim handle that brings a hidden rail back. It sits at the very left and
+   is only visible while the rail is collapsed. */
+QToolButton#railReveal {
+    background: %GLASS_RAIL%;
+    border: none;
+    border-right: 1px solid %BORDER%;
+    border-radius: 0;
+}
+QToolButton#railReveal:hover { background: %SURFACE_HOVER%; }
+
 /* ---- Top chrome ------------------------------------------------------ */
 /* The same sheen as the rail: lighter where the light falls, so the bar looks
    like a sheet of glass lying on the window. */
