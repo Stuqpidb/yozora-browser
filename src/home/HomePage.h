@@ -38,8 +38,13 @@ public:
     void load();
     void save() const;
 
+    [[nodiscard]] bool isEmpty() const { return m_sites.isEmpty(); }
+
 signals:
     void openUrl(const QUrl& url);
+    // Emitted whenever the set of pinned sites changes, so the page can hide the
+    // "PINNED" heading when there is nothing pinned.
+    void changed();
 
 private:
     struct Site {

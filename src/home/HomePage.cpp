@@ -80,18 +80,6 @@ QString hostOf(const QString& url)
     return host.isEmpty() ? url : host;
 }
 
-QList<QPair<QString, QString>> defaultSites()
-{
-    return {
-        {QStringLiteral("https://duckduckgo.com"), QStringLiteral("DuckDuckGo")},
-        {QStringLiteral("https://github.com"), QStringLiteral("GitHub")},
-        {QStringLiteral("https://www.youtube.com"), QStringLiteral("YouTube")},
-        {QStringLiteral("https://en.wikipedia.org"), QStringLiteral("Wikipedia")},
-        {QStringLiteral("https://www.reddit.com"), QStringLiteral("Reddit")},
-        {QStringLiteral("https://news.ycombinator.com"), QStringLiteral("Hacker News")},
-    };
-}
-
 }  // namespace
 
 // ---------------------------------------------------------------------------
@@ -193,6 +181,7 @@ void PinnedSites::rebuild()
     m_grid->addWidget(add, index / columns, index % columns);
 
     updateGeometry();
+    emit changed();
 }
 
 void PinnedSites::addSite()
@@ -254,13 +243,9 @@ void PinnedSites::load()
     }
 
     if (sites.isEmpty()) {
-        for (const auto& site : defaultSites()) {
-            m_sites.append({site.first, site.second});
-        }
+        // A new installation starts empty on purpose: no sites are pinned for
+        // the user. The row shows only the "+" tile so they can add their own.
         rebuild();
-        // Written straight away, so the migration above runs once instead of on
-        // every start.
-        save();
         return;
     }
     for (const QJsonValue& value : std::as_const(sites)) {
@@ -315,6 +300,11 @@ HomePage::HomePage(QWidget* parent)
 
     buildLayout();
     m_pins->load();
+    // A fresh install has nothing pinned, so the "PINNED" heading is hidden
+    // until the first site is added; the row keeps only its "+" tile.
+    const auto syncPinsTitle = [this] { m_pinsTitle->setVisible(!m_pins->isEmpty()); };
+    connect(m_pins, &PinnedSites::changed, this, syncPinsTitle);
+    syncPinsTitle();
     m_field->setFocus(Qt::OtherFocusReason);
 }
 
