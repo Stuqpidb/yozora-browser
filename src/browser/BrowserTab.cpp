@@ -59,28 +59,6 @@ BrowserTab::BrowserTab(QWebEngineProfile* profile, Settings* settings, HistorySt
         });
         connect(page, &WebPage::loadProgressChanged, this, &BrowserTab::loadProgressChanged);
         connect(page, &WebPage::newWindowRequested, this, &BrowserTab::newTabRequested);
-        // Full screen has to be applied to the top-level window, not to the
-        // inner view: setting it on the view left the tab strip, the toolbar and
-        // the Windows taskbar visible, which is not what a video's full-screen
-        // button means. The whole browser window (and only it) is what enters
-        // full screen, the way Chrome does it.
-        connect(page, &WebPage::fullScreenRequested, this, [this](bool fullScreen) {
-            QWidget* window = m_view->window();
-            if (!window) {
-                return;
-            }
-            // Entering: remember the previous state so leaving restores exactly
-            // what the user had (a normal or a maximized window).
-            if (fullScreen) {
-                if (window->windowState() & Qt::WindowFullScreen) {
-                    return;
-                }
-                m_stateBeforeFullScreen = window->windowState();
-                window->setWindowState(m_stateBeforeFullScreen | Qt::WindowFullScreen);
-            } else {
-                window->setWindowState(m_stateBeforeFullScreen & ~Qt::WindowFullScreen);
-            }
-        });
         connect(m_view, &WebView::newTabRequested, this, &BrowserTab::newTabRequested);
         connect(m_view, &WebView::statusMessage, this, &BrowserTab::statusMessage);
         connect(m_view, &QWebEngineView::loadFinished, this, [this](bool ok) {

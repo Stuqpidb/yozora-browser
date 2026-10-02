@@ -307,14 +307,14 @@ void BrowserWindow::buildShortcuts()
     add(sequence("Esc"), [this] {
         // Leaving a video's full screen is the first thing Esc should do; the
         // page is told too, so its own full-screen state does not get stuck.
-        if (isFullScreen()) {
-            setWindowState(windowState() & ~Qt::WindowFullScreen);
+        if (m_browserFullScreen) {
             if (auto* tab = currentTab()) {
                 if (auto* view = tab->view()) {
                     view->page()->runJavaScript(
                         QStringLiteral("document.fullscreenElement && document.exitFullscreen()"));
                 }
             }
+            setBrowserFullScreen(false);
             return;
         }
         if (m_navBar->addressBar()->hasFocus()) {
@@ -632,6 +632,11 @@ void BrowserWindow::connectTab(BrowserTab* tab)
             }
             connect(page, &WebPage::externalProtocolRequested, this,
                     &BrowserWindow::handleExternalProtocol);
+            // The page (a video's full-screen button, typically) asks to go
+            // full screen; the window hides its chrome and takes over the whole
+            // screen.
+            connect(page, &WebPage::fullScreenRequested, this,
+                    &BrowserWindow::setBrowserFullScreen);
         }
         connect(view, &WebView::zoomChanged, this, [this, tab](int percent) {
             if (tab == currentTab()) {
@@ -875,6 +880,42 @@ void BrowserWindow::showDownloadsManager()
 {
     DownloadsDialog dialog(m_downloads, this);
     dialog.exec();
+}
+
+void BrowserWindow::setBrowserFullScreen(bool fullScreen)
+{
+    if (m_browserFullScreen == fullScreen) {
+        return;
+    }
+    m_browserFullScreen = fullScreen;
+
+    if (fullScreen) {
+        // Remember whether the window was maximized so leaving full screen puts
+        // it back the way it was.
+        m_wasMaximizedBeforeFullScreen = isMaximized();
+        // Hide the browser chrome: tab strip, navigation bar and the download
+        // strip. On a video this is what makes it cover the whole screen.
+        m_tabStrip->setVisible(false);
+        m_navBar->setVisible(false);
+        if (m_downloads && m_downloads->statusBar()) {
+            m_downloads->statusBar()->setVisible(false);
+        }
+        showFullScreen();
+    } else {
+        m_tabStrip->setVisible(true);
+        m_navBar->setVisible(true);
+        if (m_downloads && m_downloads->statusBar()) {
+            m_downloads->statusBar()->setVisible(m_downloads->activeDownloadCount() > 0);
+        }
+        // showMaximized()/showNormal() rather than setWindowState(): going back
+        // through setWindowState made Windows animate a minimize/restore flash
+        // on the way out.
+        if (m_wasMaximizedBeforeFullScreen) {
+            showMaximized();
+        } else {
+            showNormal();
+        }
+    }
 }
 
 void BrowserWindow::toggleBookmark()

@@ -7,7 +7,7 @@ Linux. It is a real C++ desktop application with its own interface, not a web
 site in a wrapper and not an Electron app. Pages are rendered by Chromium
 through Qt WebEngine.
 
-> **Status: 0.2.6.** Windows installers are published on the
+> **Status: 0.2.7.** Windows installers are published on the
 > [releases page](https://github.com/Stuqpidb/yozora-browser/releases). Linux is
 > not packaged yet. The interface is still moving; see the roadmap below.
 

@@ -74,6 +74,10 @@ public:
     void showClearBrowsingData();
     void showShield();
     void showDownloadsManager();
+    // Enters or leaves a page's full screen: the whole window goes full screen
+    // and the browser chrome (tab strip, toolbar) is hidden, the way Chrome
+    // does it.
+    void setBrowserFullScreen(bool fullScreen);
 
     [[nodiscard]] bool isPrivateMode() const { return m_private; }
 
@@ -150,6 +154,8 @@ private:
     int m_lastActiveIndex = 0;
     bool m_private = false;
     bool m_closing = false;
+    bool m_browserFullScreen = false;
+    bool m_wasMaximizedBeforeFullScreen = false;
     QTimer* m_sessionTimer = nullptr;
     QTimer* m_updateTimer = nullptr;
     // True while an automatic (background) check is running, so its failures and

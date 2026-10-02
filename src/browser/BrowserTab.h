@@ -87,9 +87,6 @@ private:
     HistoryStore* m_history = nullptr;
     QString m_lastTitle;
     QUrl m_lastUrl;
-    // Window state to restore when a page leaves full screen (so a maximized
-    // window comes back maximized and a normal one comes back normal).
-    Qt::WindowStates m_stateBeforeFullScreen = Qt::WindowNoState;
 };
 
 }  // namespace yozora
