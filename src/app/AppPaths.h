@@ -49,6 +49,11 @@ public:
     // Creates all directories above. Safe to call repeatedly.
     static void ensureCreated();
 
+    // Registers the compiled qrc bundle. The bundle lives in the static core
+    // library and the linker may drop its initialiser if nothing references it,
+    // so this is called explicitly wherever ":/..." paths are first used.
+    static void ensureResourcesLoaded();
+
     // Directory the application was started from - used to locate bundled
     // resources in a portable installation.
     [[nodiscard]] static QString appDir();

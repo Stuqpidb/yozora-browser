@@ -38,6 +38,11 @@ public:
     // Shows or hides the "PRIVATE" badge for private browsing windows.
     void setPrivateMode(bool enabled);
 
+    // The shield shows how many requests were blocked on the current page and
+    // lets the site be allowed. `blocked` is that per-page count; `enabled`
+    // mirrors the global ad-blocking switch.
+    void setShieldState(int blocked, bool enabled);
+
     // Repaints every control for the current theme.
     // Shows a transient message next to the address bar.
     void showMessage(const QString& message);
@@ -49,6 +54,7 @@ signals:
     void reloadRequested();
     void stopRequested();
     void bookmarkRequested();
+    void shieldRequested();
     void menuRequested(const QPoint& globalPos);
 
 private:
@@ -59,6 +65,7 @@ private:
     NavButton* m_backButton = nullptr;
     NavButton* m_forwardButton = nullptr;
     NavButton* m_reloadButton = nullptr;
+    NavButton* m_shieldButton = nullptr;
     NavButton* m_starButton = nullptr;
     NavButton* m_menuButton = nullptr;
 

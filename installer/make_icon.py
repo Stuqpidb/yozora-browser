@@ -1,115 +1,150 @@
 #!/usr/bin/env python3
-"""Generates the Yozora application icon (PNG set + Windows .ico).
+"""Generates the Yozora application icon set from the master artwork.
 
-The icon is drawn here rather than exported from a vector tool so the source of
-truth is reviewable in text and the whole set can be regenerated with one
-command:
+The artwork itself lives in resources/icons/yozora-source.png and is not drawn
+here. It used to be: the icon used to be a hand-coded crescent moon, which was
+reviewable as text, and this script drew it. The mark is now a real piece of
+artwork, and re-drawing it in code would only produce a worse copy of it, so
+this script's whole job is to turn that one file into the sizes the product
+actually needs:
 
     python installer/make_icon.py
 
-Outputs resources/icons/yozora-<size>.png and installer/yozora.ico.
+Outputs:
+    resources/icons/yozora-<size>.png   for 16, 24, 32, 48, 64, 128, 256
+    resources/icons/yozora.png          the 256px one, the "main" icon
+    installer/yozora.ico                Windows: the exe and the NSIS installer
+    resources/icons/yozora.svg          an SVG wrapper around the raster
+
+Two things are worth knowing about the result:
+
+  * The master file has a lot of transparent margin around it and the planet is
+    off-centre, so the artwork is cropped to its own content and then squared
+    up. Cropping without squaring would stretch the rings into ellipses.
+
+  * The SVG is not a vector drawing. Nothing in the project uses it - the
+    application reads the PNGs - but it used to be the hand-coded moon, so
+    leaving it would have shipped a second, contradictory icon. It is now a
+    wrapper that embeds the raster, which keeps the file working for anything
+    that expects an .svg while showing the same mark.
 """
 
-import math
+import base64
 import pathlib
 
-from PIL import Image, ImageDraw
+from PIL import Image
 
 ROOT = pathlib.Path(__file__).resolve().parent.parent
 ICON_DIR = ROOT / "resources" / "icons"
-
-# Yozora night-sky palette, kept in sync with src/core/Theme.cpp
-SKY_TOP = (10, 14, 22)
-SKY_BOTTOM = (18, 23, 36)
-MOON_LIGHT = (207, 224, 255)
-MOON_DARK = (110, 168, 254)
-STAR = (200, 214, 245)
-
-# Fixed star field: same points every time the icon is generated.
-STARS = [
-    (0.18, 0.19, 0.010), (0.34, 0.13, 0.007), (0.77, 0.16, 0.009),
-    (0.87, 0.34, 0.007), (0.13, 0.41, 0.007), (0.25, 0.77, 0.008),
-    (0.74, 0.83, 0.009), (0.49, 0.17, 0.006), (0.83, 0.63, 0.007),
-    (0.61, 0.30, 0.005), (0.08, 0.60, 0.006), (0.44, 0.68, 0.005),
-]
+SOURCE = ICON_DIR / "yozora-source.png"
 
 SIZES = [16, 24, 32, 48, 64, 128, 256]
 
+# The icon sizes every target really uses. The others are there for installers
+# and desktop environments that pick their own.
+MAIN_SIZE = 256
 
-def draw_icon(size: int) -> Image.Image:
-    scale = 4  # supersample, then downscale for clean edges
-    s = size * scale
-    image = Image.new("RGBA", (s, s), (0, 0, 0, 0))
-    draw = ImageDraw.Draw(image)
+# The raster size embedded in yozora.svg. See write_svg_wrapper().
+SVG_EMBED_SIZE = 128
 
-    # Rounded-square background with a vertical gradient.
-    radius = int(s * 0.22)
-    for y in range(s):
-        t = y / max(s - 1, 1)
-        color = tuple(
-            round(SKY_TOP[i] + (SKY_BOTTOM[i] - SKY_TOP[i]) * t) for i in range(3)
-        )
-        draw.line([(0, y), (s, y)], fill=color + (255,))
+# Alpha below this is treated as empty when finding the artwork's edges, so the
+# soft glow around the planet does not drag the crop outwards.
+ALPHA_CUTOFF = 8
 
-    mask = Image.new("L", (s, s), 0)
-    ImageDraw.Draw(mask).rounded_rectangle([0, 0, s - 1, s - 1], radius, fill=255)
-    image.putalpha(mask)
-    draw = ImageDraw.Draw(image)
+# Breathing room between the artwork and the edge of the icon, as a fraction of
+# its own size. Windows puts its own padding around a 16px icon, and a mark that
+# touches the edge looks cropped.
+PADDING = 0.04
 
-    for x, y, r in STARS:
-        alpha = 90 if r > 0.007 else 150
-        cx, cy, rad = x * s, y * s, max(1, round(r * s))
-        draw.ellipse(
-            [cx - rad, cy - rad, cx + rad, cy + rad], fill=STAR + (alpha,)
-        )
 
-    # Crescent moon: a light disc with an offset disc punched out of it. The
-    # punch-out is done with a mask so the background gradient shows through
-    # instead of a flat disc of colour.
-    moon_r = s * 0.24
-    moon_cx, moon_cy = s * 0.5, s * 0.49
+def cropped_to_content(image: Image.Image) -> Image.Image:
+    """The part of the artwork that is actually visible."""
+    alpha = image.getchannel("A")
+    mask = alpha.point(lambda value: 255 if value > ALPHA_CUTOFF else 0)
+    box = mask.getbbox()
+    if box is None:
+        raise SystemExit(f"{SOURCE} is fully transparent - nothing to make an icon from")
+    return image.crop(box)
 
-    crescent = Image.new("L", (s, s), 0)
-    crescent_draw = ImageDraw.Draw(crescent)
-    crescent_draw.ellipse(
-        [moon_cx - moon_r, moon_cy - moon_r, moon_cx + moon_r, moon_cy + moon_r], fill=255
-    )
-    cut = moon_r * 0.92
-    cut_cx, cut_cy = moon_cx + moon_r * 0.34, moon_cy - moon_r * 0.28
-    crescent_draw.ellipse(
-        [cut_cx - cut, cut_cy - cut, cut_cx + cut, cut_cy + cut], fill=0
-    )
 
-    moon = Image.new("RGBA", (s, s), MOON_LIGHT + (255,))
-    arc = Image.new("RGBA", (s, s), (0, 0, 0, 0))
-    ImageDraw.Draw(arc).arc(
-        [moon_cx - moon_r, moon_cy - moon_r, moon_cx + moon_r, moon_cy + moon_r],
-        start=105,
-        end=250,
-        fill=MOON_DARK + (255,),
-        width=max(1, round(s * 0.022)),
-    )
-    moon.alpha_composite(arc)
-    image.paste(moon, (0, 0), crescent)
-
-    return image.resize((size, size), Image.LANCZOS)
+def squared(image: Image.Image) -> Image.Image:
+    """Fit the artwork into a square with padding, without distorting it."""
+    side = max(image.size)
+    padded = round(side * (1 + 2 * PADDING))
+    canvas = Image.new("RGBA", (padded, padded), (0, 0, 0, 0))
+    canvas.alpha_composite(image, ((padded - image.width) // 2,
+                                   (padded - image.height) // 2))
+    return canvas
 
 
 def main() -> None:
+    if not SOURCE.exists():
+        raise SystemExit(
+            f"missing {SOURCE}\n"
+            "The master artwork has to be in the repository; the icon set is "
+            "generated from it."
+        )
+
     ICON_DIR.mkdir(parents=True, exist_ok=True)
-    images = [draw_icon(size) for size in SIZES]
+    master = squared(cropped_to_content(Image.open(SOURCE).convert("RGBA")))
 
-    for size, image in zip(SIZES, images):
-        image.save(ICON_DIR / f"yozora-{size}.png")
-    images[-1].save(ROOT / "resources" / "icons" / "yozora.png")
+    # Every size is taken from the master rather than from the 256px one, so a
+    # 16px icon is not a downscaled 256px icon.
+    for size in SIZES:
+        master.resize((size, size), Image.LANCZOS).save(
+            ICON_DIR / f"yozora-{size}.png")
 
+    master.resize((MAIN_SIZE, MAIN_SIZE), Image.LANCZOS).save(
+        ICON_DIR / "yozora.png")
+
+    # Windows wants one .ico holding every size; the master is handed over at
+    # full size so nothing is resampled twice.
     ico_path = ROOT / "installer" / "yozora.ico"
     ico_path.parent.mkdir(parents=True, exist_ok=True)
-    images[-1].save(ico_path, format="ICO",
-                    sizes=[(s, s) for s in SIZES if s <= 256])
+    master.save(ico_path, format="ICO", sizes=[(s, s) for s in SIZES])
 
-    print(f"wrote {len(SIZES)} PNG files to {ICON_DIR}")
-    print(f"wrote {ico_path}")
+    write_svg_wrapper(master)
+
+    print(f"source:      {SOURCE.relative_to(ROOT)}")
+    print(f"squared to:  {master.size[0]}px")
+    print(f"wrote {len(SIZES)} PNG files to {ICON_DIR.relative_to(ROOT)}")
+    print(f"wrote {ico_path.relative_to(ROOT)}")
+    print(f"wrote {(ICON_DIR / 'yozora.svg').relative_to(ROOT)}")
+
+
+def write_svg_wrapper(master: Image.Image) -> None:
+    """An SVG that embeds the raster, for anything that insists on .svg.
+
+    The embed is at 128px rather than 256 on purpose: the file is compiled into
+    the executable through the resource bundle, and a full-size PNG turns a
+    1 KB placeholder into 340 KB of binary. Nothing in the project uses the SVG,
+    so crispness past 128px is not worth that.
+    """
+    encoded = base64.b64encode(
+        master.resize((SVG_EMBED_SIZE, SVG_EMBED_SIZE), Image.LANCZOS)
+        .convert("RGBA").tobytes()
+    ).decode("ascii")
+
+    svg = (
+        '<?xml version="1.0" encoding="UTF-8"?>\n'
+        "<!--\n"
+        "  The Yozora mark, embedded as a raster.\n"
+        "\n"
+        "  This file used to be a hand-coded crescent moon that had drifted away\n"
+        "  from the real icon. It is kept only so that anything expecting an\n"
+        "  .svg keeps working; the application itself uses the PNGs, and this\n"
+        f"  file is not referenced by any of them. Embedded at {SVG_EMBED_SIZE}px so it\n"
+        "  does not bloat the resource bundle.\n"
+        "-->\n"
+        f'<svg xmlns="http://www.w3.org/2000/svg" '
+        f'xmlns:xlink="http://www.w3.org/1999/xlink" '
+        f'viewBox="0 0 {MAIN_SIZE} {MAIN_SIZE}" '
+        f'width="{MAIN_SIZE}" height="{MAIN_SIZE}">\n'
+        f'  <image width="{MAIN_SIZE}" height="{MAIN_SIZE}" '
+        f'xlink:href="data:image/png;base64,{encoded}"/>\n'
+        "</svg>\n"
+    )
+    (ICON_DIR / "yozora.svg").write_text(svg, encoding="utf-8")
 
 
 if __name__ == "__main__":

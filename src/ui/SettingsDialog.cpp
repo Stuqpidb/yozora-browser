@@ -4,16 +4,20 @@
 #include "core/Animation.h"
 #include "core/SearchEngine.h"
 #include "core/Settings.h"
+#include "core/Theme.h"
 #include "ui/ClearBrowsingDataDialog.h"
+#include "ui/Icons.h"
 #include "utils/Version.h"
 #include "web/WebProfile.h"
 
 #include <QAbstractAnimation>
 #include <QAbstractItemView>
 #include <QCheckBox>
+#include <QColor>
 #include <QComboBox>
 #include <QDialogButtonBox>
 #include <QFileDialog>
+#include <QFont>
 #include <QFormLayout>
 #include <QFrame>
 #include <QGraphicsOpacityEffect>
@@ -22,11 +26,15 @@
 #include <QLabel>
 #include <QLineEdit>
 #include <QListWidget>
+#include <QPainter>
+#include <QPen>
 #include <QPushButton>
 #include <QScrollArea>
 #include <QShowEvent>
 #include <QStackedWidget>
 #include <QStyle>
+#include <QStyledItemDelegate>
+#include <QStyleOptionViewItem>
 #include <QVariantAnimation>
 #include <QVBoxLayout>
 
@@ -51,12 +59,80 @@ QLabel* hint(const QString& text, QWidget* parent)
     return label;
 }
 
+// One row of the settings section list, painted by hand.
+//
+// A style sheet can colour a list row but it cannot put the icon, the label and
+// the highlight on the same baseline. Drawing the row is what lets the settings
+// navigation look like the left rail instead of a plain system list, and it is
+// the same approach the rail already uses.
+class SettingsNavDelegate : public QStyledItemDelegate {
+public:
+    using QStyledItemDelegate::QStyledItemDelegate;
+
+    [[nodiscard]] QSize sizeHint(const QStyleOptionViewItem&, const QModelIndex&) const override
+    {
+        return {0, 42};
+    }
+
+    void paint(QPainter* painter, const QStyleOptionViewItem& option,
+               const QModelIndex& index) const override
+    {
+        painter->save();
+        painter->setRenderHint(QPainter::Antialiasing, true);
+
+        const auto c = Theme::colors();
+        const bool selected = option.state & QStyle::State_Selected;
+        const bool hovered = option.state & QStyle::State_MouseOver;
+        const QRectF row = QRectF(option.rect).adjusted(8, 2, -8, -2);
+        const QColor accent(c.accent);
+
+        if (selected) {
+            QColor fill = accent;
+            fill.setAlpha(38);
+            QColor line = accent;
+            line.setAlpha(120);
+            painter->setPen(QPen(line, 1.0));
+            painter->setBrush(fill);
+            painter->drawRoundedRect(row, 11, 11);
+
+            // A short accent bar keeps the current section legible even where
+            // the glass pill is faint against the background.
+            painter->setPen(Qt::NoPen);
+            painter->setBrush(accent);
+            painter->drawRoundedRect(QRectF(row.left() + 5, row.center().y() - 9, 3.0, 18),
+                                     1.5, 1.5);
+        } else if (hovered) {
+            painter->setPen(Qt::NoPen);
+            painter->setBrush(QColor(255, 255, 255, 16));
+            painter->drawRoundedRect(row, 11, 11);
+        }
+
+        const QColor glyph = selected ? accent : QColor(c.textMuted);
+        const QRectF iconBox(row.left() + 16, row.center().y() - 9.5, 19, 19);
+        icons::draw(*painter, static_cast<icons::Shape>(index.data(Qt::UserRole).toInt()),
+                    iconBox, glyph, 1.7);
+
+        QFont font = option.font;
+        font.setPixelSize(13);
+        font.setWeight(selected ? QFont::DemiBold : QFont::Normal);
+        painter->setFont(font);
+        painter->setPen(selected ? QColor(c.text) : QColor(c.textMuted));
+
+        const QRectF text(row.left() + 48, row.top(), row.width() - 56, row.height());
+        painter->drawText(text, Qt::AlignVCenter | Qt::AlignLeft,
+                          index.data(Qt::DisplayRole).toString());
+
+        painter->restore();
+    }
+};
+
 }  // namespace
 
 // A section: its title, the sentence under it, and the page's own widgets.
 // Defined out of line here because the header only forward-declares it, and the
 // constructor needs the full type to build the list of them.
 struct SettingsDialog::Section {
+    icons::Shape icon;
     QString title;
     QString subtitle;
     QWidget* page;
@@ -74,16 +150,48 @@ SettingsDialog::SettingsDialog(Settings* settings, WebProfile* profile, QWidget*
     root->setContentsMargins(0, 0, 0, 0);
     root->setSpacing(0);
 
-    m_nav = new QListWidget(this);
+    // The section list lives in a branded column: a wordmark band on top and
+    // the sections below it, painted by SettingsNavDelegate. It was a bare
+    // system list before, which read as a different application next to the
+    // rail and the cards.
+    auto* navColumn = new QWidget(this);
+    navColumn->setObjectName(QStringLiteral("settingsNavColumn"));
+    navColumn->setAttribute(Qt::WA_StyledBackground, true);
+    navColumn->setFixedWidth(236);
+    auto* navLayout = new QVBoxLayout(navColumn);
+    navLayout->setContentsMargins(0, 0, 0, 0);
+    navLayout->setSpacing(0);
+
+    auto* brand = new QWidget(navColumn);
+    brand->setObjectName(QStringLiteral("settingsBrand"));
+    brand->setAttribute(Qt::WA_StyledBackground, true);
+    auto* brandLayout = new QVBoxLayout(brand);
+    brandLayout->setContentsMargins(22, 20, 22, 15);
+    brandLayout->setSpacing(1);
+    auto* wordmark = new QLabel(tr("Yozora"), brand);
+    wordmark->setObjectName(QStringLiteral("settingsBrandWord"));
+    brandLayout->addWidget(wordmark);
+    auto* brandCaption = new QLabel(tr("SETTINGS"), brand);
+    brandCaption->setObjectName(QStringLiteral("settingsBrandCaption"));
+    brandLayout->addWidget(brandCaption);
+    navLayout->addWidget(brand);
+
+    m_nav = new QListWidget(navColumn);
     m_nav->setObjectName(QStringLiteral("settingsNav"));
-    m_nav->setFixedWidth(210);
+    m_nav->setItemDelegate(new SettingsNavDelegate(m_nav));
+    m_nav->setFrameShape(QFrame::NoFrame);
+    m_nav->setHorizontalScrollBarPolicy(Qt::ScrollBarAlwaysOff);
+    m_nav->setVerticalScrollMode(QAbstractItemView::ScrollPerPixel);
     // The section list has to be reachable from the keyboard. It used to be
     // NoFocus, which meant the only way to change section was the mouse - and
     // since the controls inside a page hold the focus, even Up/Down landed on a
     // combo box instead of the list.
     m_nav->setFocusPolicy(Qt::StrongFocus);
     m_nav->setFocusProxy(nullptr);
-    root->addWidget(m_nav);
+    m_nav->setMouseTracking(true);
+    m_nav->viewport()->setMouseTracking(true);
+    navLayout->addWidget(m_nav, 1);
+    root->addWidget(navColumn);
 
     auto* right = new QWidget(this);
     auto* rightLayout = new QVBoxLayout(right);
@@ -92,20 +200,25 @@ SettingsDialog::SettingsDialog(Settings* settings, WebProfile* profile, QWidget*
 
     auto* stack = new QStackedWidget(right);
     const QList<Section> sections = {
-        {tr("Search"), tr("Which engine answers what you type in the address bar."),
-         buildSearchSection()},
-        {tr("Startup"), tr("What happens when the browser opens."), buildStartupSection()},
-        {tr("Downloads"), tr("Where files are saved."), buildDownloadsSection()},
-        {tr("Privacy"),
+        {icons::Shape::Magnifier, tr("Search"),
+         tr("Which engine answers what you type in the address bar."), buildSearchSection()},
+        {icons::Shape::Home, tr("Startup"), tr("What happens when the browser opens."),
+         buildStartupSection()},
+        {icons::Shape::Download, tr("Downloads"), tr("Where files are saved."),
+         buildDownloadsSection()},
+        {icons::Shape::Shield, tr("Privacy"),
          tr("The defaults here are the private ones. Everything that weakens privacy has to be "
             "turned on on purpose."),
          buildPrivacySection()},
-        {tr("Scrolling"), tr("How the mouse wheel moves a page."), buildScrollingSection()},
-        {tr("Data"), tr("What Yozora keeps on this machine."), buildDataSection()},
-        {tr("About"), tr("Version and licences."), buildAboutSection()},
+        {icons::Shape::Wheel, tr("Scrolling"), tr("How the mouse wheel moves a page."),
+         buildScrollingSection()},
+        {icons::Shape::Database, tr("Data"), tr("What Yozora keeps on this machine."),
+         buildDataSection()},
+        {icons::Shape::Info, tr("About"), tr("Version and licences."), buildAboutSection()},
     };
     for (const Section& section : sections) {
-        m_nav->addItem(section.title);
+        auto* item = new QListWidgetItem(section.title, m_nav);
+        item->setData(Qt::UserRole, static_cast<int>(section.icon));
         stack->addWidget(wrapSection(section, stack));
     }
     connect(m_nav, &QListWidget::currentRowChanged, this, [this, stack](int row) {
@@ -142,7 +255,7 @@ SettingsDialog::SettingsDialog(Settings* settings, WebProfile* profile, QWidget*
 
     connect(m_blockThirdPartyCookies, &QCheckBox::toggled, this, &SettingsDialog::applyToSettings);
     connect(m_keepCookies, &QCheckBox::toggled, this, &SettingsDialog::applyToSettings);
-    connect(m_blockTrackers, &QCheckBox::toggled, this, &SettingsDialog::applyToSettings);
+    connect(m_blockAds, &QCheckBox::toggled, this, &SettingsDialog::applyToSettings);
     connect(m_sendDnt, &QCheckBox::toggled, this, &SettingsDialog::applyToSettings);
     connect(m_notifications, &QCheckBox::toggled, this, &SettingsDialog::applyToSettings);
     connect(m_webrtcPolicy, &QComboBox::currentIndexChanged, this, [this](int) {
@@ -366,13 +479,15 @@ QWidget* SettingsDialog::buildPrivacySection()
     // and a second heading inside it would say the same thing one level down.
     auto* tracking = new QGroupBox(page);
     auto* trackingLayout = new QVBoxLayout(tracking);
-    m_blockTrackers = new QCheckBox(tr("Block requests to known tracking domains"), tracking);
+    m_blockAds = new QCheckBox(tr("Block ads and trackers on every site"), tracking);
     m_sendDnt = new QCheckBox(tr("Send \"Do Not Track\" and \"Global Privacy Control\" signals"),
                               tracking);
-    trackingLayout->addWidget(m_blockTrackers);
+    trackingLayout->addWidget(m_blockAds);
     trackingLayout->addWidget(m_sendDnt);
-    trackingLayout->addWidget(hint(tr("The tracker list ships with Yozora and is applied "
-                                      "locally. Nothing is ever fetched from Yozora's servers."),
+    trackingLayout->addWidget(hint(tr("The ad and tracker lists ship with Yozora and are applied "
+                                      "locally; nothing is ever fetched from Yozora's servers. "
+                                      "Sites can be allowed one by one from the shield in the "
+                                      "address bar."),
                                    tracking));
     layout->addWidget(tracking);
 
@@ -585,7 +700,7 @@ void SettingsDialog::loadFromSettings()
 
         m_blockThirdPartyCookies->setChecked(m_settings->blockThirdPartyCookies());
         m_keepCookies->setChecked(m_settings->keepCookiesOnExit());
-        m_blockTrackers->setChecked(m_settings->blockTrackers());
+        m_blockAds->setChecked(m_settings->blockAds());
         m_sendDnt->setChecked(m_settings->sendDoNotTrack());
         m_notifications->setChecked(m_settings->notificationsEnabled());
         m_webrtcPolicy->setCurrentIndex(static_cast<int>(m_settings->webrtcPolicy()));
@@ -616,7 +731,7 @@ void SettingsDialog::applyToSettings()
 
     m_settings->setBlockThirdPartyCookies(m_blockThirdPartyCookies->isChecked());
     m_settings->setKeepCookiesOnExit(m_keepCookies->isChecked());
-    m_settings->setBlockTrackers(m_blockTrackers->isChecked());
+    m_settings->setBlockAds(m_blockAds->isChecked());
     m_settings->setSendDoNotTrack(m_sendDnt->isChecked());
     m_settings->setNotificationsEnabled(m_notifications->isChecked());
     m_settings->setWebRtcPolicy(static_cast<Settings::WebRtcPolicy>(m_webrtcPolicy->currentIndex()));

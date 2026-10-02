@@ -83,4 +83,17 @@ void AppPaths::ensureCreated()
     QDir().mkpath(stateDir());
 }
 
+void AppPaths::ensureResourcesLoaded()
+{
+    // Q_INIT_RESOURCE must be called from the global namespace (or a function
+    // outside any namespace), and it is a macro that expands to a local static
+    // initialiser guarded by a name, so a one-shot lambda keeps it safe to call
+    // repeatedly.
+    static const bool once = [] {
+        Q_INIT_RESOURCE(resources);
+        return true;
+    }();
+    Q_UNUSED(once)
+}
+
 }  // namespace yozora

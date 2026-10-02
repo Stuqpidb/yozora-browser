@@ -51,6 +51,12 @@ void NavButton::setShape(icons::Shape shape)
     update();
 }
 
+void NavButton::setIconColor(const QColor& color)
+{
+    m_iconColor = color;
+    update();
+}
+
 QSize NavButton::sizeHint() const
 {
     return {kSize, kSize};
@@ -150,6 +156,17 @@ void NavButton::paintEvent(QPaintEvent* event)
         color = QColor::fromRgbF(muted.redF() + (full.redF() - muted.redF()) * m_hover,
                                  muted.greenF() + (full.greenF() - muted.greenF()) * m_hover,
                                  muted.blueF() + (full.blueF() - muted.blueF()) * m_hover);
+    }
+    // An explicit colour (the shield) wins, but still brightens on hover so it
+    // does not look inert.
+    if (m_iconColor.isValid()) {
+        color = m_iconColor;
+        if (m_hover > 0.0 && live) {
+            const QColor full(c.text);
+            color = QColor::fromRgbF(color.redF() + (full.redF() - color.redF()) * m_hover,
+                                     color.greenF() + (full.greenF() - color.greenF()) * m_hover,
+                                     color.blueF() + (full.blueF() - color.blueF()) * m_hover);
+        }
     }
 
     const qreal icon = m_iconSize;

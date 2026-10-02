@@ -9,9 +9,11 @@ whole set can be regenerated from a clean checkout:
 
     python installer/make_fonts.py
 
-Outputs resources/fonts/*.ttf. Requires fontTools (pip install fonttools).
-The upstream sources are SIL Open Font License 1.1; the licence text is stored
-next to the fonts in resources/fonts/OFL.txt.
+Outputs resources/fonts/*.ttf and the licence texts in LICENSES/. Requires
+fontTools (pip install fonttools). The upstream sources are SIL Open Font
+License 1.1; each family gets its own OFL text in LICENSES/, because the licence
+requires the copyright notice of the family that owns the files to travel with
+them, and Inter's notice says nothing at all about Space Grotesk.
 """
 
 import pathlib
@@ -23,6 +25,10 @@ from fontTools.varLib import instancer
 
 ROOT = pathlib.Path(__file__).resolve().parent.parent
 FONT_DIR = ROOT / "resources" / "fonts"
+# LICENSES/ is the single source of truth for every licence text the project
+# ships: CMake installs the directory into the build, so a missing or wrong text
+# here is a compliance bug in the installer, not just a documentation gap.
+LICENCE_DIR = ROOT / "LICENSES"
 # The upstream variable fonts are an input, not an output: they are cached
 # outside the tree so only the static instances end up in the repository.
 CACHE_DIR = ROOT / "build" / "fontcache"
@@ -49,9 +55,14 @@ SOURCES = {
     ),
 }
 
-LICENCE = (
-    "https://raw.githubusercontent.com/google/fonts/main/ofl/inter/OFL.txt"
-)
+# One OFL text per family, keyed by the file name it lands in under LICENSES/.
+LICENCES = {
+    "Inter-OFL-1.1.txt":
+        "https://raw.githubusercontent.com/google/fonts/main/ofl/inter/OFL.txt",
+    "SpaceGrotesk-OFL-1.1.txt":
+        "https://raw.githubusercontent.com/google/fonts/main/ofl/"
+        "spacegrotesk/OFL.txt",
+}
 
 
 def fetch(url: str, target: pathlib.Path) -> None:
@@ -65,6 +76,7 @@ def fetch(url: str, target: pathlib.Path) -> None:
 def main() -> int:
     FONT_DIR.mkdir(parents=True, exist_ok=True)
     CACHE_DIR.mkdir(parents=True, exist_ok=True)
+    LICENCE_DIR.mkdir(parents=True, exist_ok=True)
     for source_name, (url, weights) in SOURCES.items():
         source = CACHE_DIR / source_name
         fetch(url, source)
@@ -85,8 +97,13 @@ def main() -> int:
             static.save(target)
             print(f"{target.name}: {target.stat().st_size} bytes")
 
-    fetch(LICENCE, CACHE_DIR / "OFL.txt")
-    (FONT_DIR / "OFL.txt").write_bytes((CACHE_DIR / "OFL.txt").read_bytes())
+    for name, url in LICENCES.items():
+        fetch(url, CACHE_DIR / name)
+        target = LICENCE_DIR / name
+        text = (CACHE_DIR / name).read_bytes()
+        target.write_bytes(text)
+        holder = text.decode("utf-8", "replace").splitlines()[0].strip()
+        print(f"{target.relative_to(ROOT)}: {holder}")
     return 0
 
 

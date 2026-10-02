@@ -1,6 +1,9 @@
 // SPDX-License-Identifier: MIT
 #pragma once
 
+#include "privacy/FilterEngine.h"
+#include "privacy/RequestInterceptor.h"
+
 #include <QList>
 #include <QMainWindow>
 #include <QPoint>
@@ -21,6 +24,7 @@ class HistoryStore;
 class NavigationBar;
 class PermissionManager;
 class Settings;
+class ShieldDialog;
 class SideBar;
 class TabStrip;
 class UpdateChecker;
@@ -64,6 +68,7 @@ public:
     void openPrivateWindow();
     void showSettings();
     void showClearBrowsingData();
+    void showShield();
 
     [[nodiscard]] bool isPrivateMode() const { return m_private; }
 
@@ -93,6 +98,7 @@ private:
     void handleExternalProtocol(const QUrl& url, int navigationType);
     void toggleBookmark();
     void updateBookmarkStar();
+    void updateShieldState();
     void showLibrary(bool bookmarks);
     SessionSnapshot snapshot() const;
     void restoreSnapshot(const SessionSnapshot& snap);
@@ -103,7 +109,9 @@ private:
     HistoryStore* m_history = nullptr;
     UpdateChecker* m_updateChecker = nullptr;
     QPointer<UpdateDialog> m_updateDialog;
+    QPointer<ShieldDialog> m_shieldDialog;
     PermissionManager* m_permissions = nullptr;
+    BlockingStats m_blockingStats;
 
     SideBar* m_sideBar = nullptr;
     TabStrip* m_tabStrip = nullptr;

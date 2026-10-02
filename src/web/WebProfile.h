@@ -70,8 +70,12 @@ public:
     // Memory footprint of the Chromium cache, in bytes.
     [[nodiscard]] qint64 cacheSize() const;
 
-    // How many tracker requests the interceptor has blocked this session.
+    // How many requests the interceptor has blocked this session.
     [[nodiscard]] quint64 blockedTrackerCount() const;
+
+    // The interceptor, so the shield can connect to its blocking signal and
+    // read the counters. Null for profiles without one.
+    [[nodiscard]] RequestInterceptor* interceptor() const { return m_interceptor; }
 
     // Requests that on-disk site storage be wiped on the next start. Clearing
     // localStorage / IndexedDB / service workers while Chromium runs is not

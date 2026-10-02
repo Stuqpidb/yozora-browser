@@ -87,7 +87,7 @@ private:
 
     QCheckBox* m_blockThirdPartyCookies = nullptr;
     QCheckBox* m_keepCookies = nullptr;
-    QCheckBox* m_blockTrackers = nullptr;
+    QCheckBox* m_blockAds = nullptr;
     QCheckBox* m_sendDnt = nullptr;
     QCheckBox* m_notifications = nullptr;
     QComboBox* m_webrtcPolicy = nullptr;

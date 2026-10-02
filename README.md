@@ -7,9 +7,9 @@ Linux. It is a real C++ desktop application with its own interface, not a web
 site in a wrapper and not an Electron app. Pages are rendered by Chromium
 through Qt WebEngine.
 
-> **Status: private development.** The MVP is a work in progress. Nothing here
-> is released publicly yet, and the project must not be pushed to a public
-> repository.
+> **Status: 0.2.4.** Windows installers are published on the
+> [releases page](https://github.com/Stuqpidb/yozora-browser/releases). Linux is
+> not packaged yet. The interface is still moving; see the roadmap below.
 
 ---
 
@@ -33,7 +33,9 @@ through Qt WebEngine.
 
 - **No telemetry, no tracking, no account, no cloud.**
 - Third-party cookies blocked by default; cookies can be made session-only.
-- Built-in blocking of known tracker domains, with an optional local blocklist.
+- Built-in ad and tracker blocking (in the spirit of Brave) with a per-page
+  shield in the address bar and a per-site allowlist, plus an optional local
+  blocklist. No extension required.
 - Optional `Do Not Track` / `Global Privacy Control` headers.
 - Per-site permissions (camera, microphone, location, notifications, clipboard,
   fonts, pointer lock) that default to **Ask**; screen sharing is refused.
@@ -51,8 +53,8 @@ for the details and the honest limits (Yozora does **not** hide your IP).
 ## Not in the MVP
 
 Deliberately absent for now: accounts, sync, a server, extensions, a password
-manager, history and bookmarks managers, telemetry, ads, mobile, a full ad
-blocker (only known trackers are blocked). See the roadmap below.
+manager, history and bookmarks managers, telemetry, ads, mobile. See the roadmap
+below.
 
 ## Technology
 
@@ -159,20 +161,25 @@ the start page).
 
 ## Roadmap
 
-MVP first (done). Privacy hardening (Phase 2) is in place: cookies, tracker
-blocking, permissions, private windows and download safety. Next, in no
+MVP first (done). Privacy hardening (Phase 2) is in place: cookies, ad and
+tracker blocking, permissions, private windows and download safety. Next, in no
 particular order: history, bookmarks, a real download manager, browser
 profiles, WebRTC/fingerprinting hardening where the engine allows it, DNS over
-HTTPS, extensions, and auto-update. A full ad blocker is explicitly not a goal;
-known-tracker blocking is.
+HTTPS, extensions, and auto-update. A full community-list ad blocker is
+explicitly not a goal; the bundled curated lists are.
 
 ## License
 
 MIT for the code. See [LICENSE](LICENSE).
 
+The build redistributes Qt, which is licensed separately; Yozora takes the
+LGPLv3 option. The licence texts of everything that ships with the application,
+plus a note on how to replace the Qt libraries, are in
+[LICENSES/](LICENSES/) and are installed into the `licenses` folder next to the
+executable.
+
 The bundled typefaces are third-party and carry their own licence:
 [Inter](https://github.com/rsms/inter) and
 [Space Grotesk](https://fonts.google.com/specimen/Space+Grotesk) are both under
-the SIL Open Font License 1.1, reproduced in
-`resources/fonts/OFL.txt`. They are rebuilt from the upstream variable fonts by
-`installer/make_fonts.py`.
+the SIL Open Font License 1.1, each with its own text in `LICENSES/`. They are
+rebuilt from the upstream variable fonts by `installer/make_fonts.py`.

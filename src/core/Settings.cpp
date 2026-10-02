@@ -30,7 +30,8 @@ constexpr auto kKeyRestoreSession = "session/restore_on_start";
 
 constexpr auto kKeyBlockThirdPartyCookies = "privacy/block_third_party_cookies";
 constexpr auto kKeyKeepCookiesOnExit = "privacy/keep_cookies_on_exit";
-constexpr auto kKeyBlockTrackers = "privacy/block_trackers";
+constexpr auto kKeyBlockAds = "privacy/block_ads";
+constexpr auto kKeyAdBlockAllowlist = "privacy/adblock_allowlist";
 constexpr auto kKeySendDnt = "privacy/send_do_not_track";
 constexpr auto kKeyNotifications = "privacy/notifications_enabled";
 constexpr auto kKeyWebRtc = "privacy/webrtc_policy";
@@ -257,18 +258,60 @@ void Settings::setKeepCookiesOnExit(bool keep)
     emit cookiePolicyChanged();
 }
 
-bool Settings::blockTrackers() const
+bool Settings::blockAds() const
 {
-    return d->store.value(QLatin1String(kKeyBlockTrackers), true).toBool();
+    // The old key is still honoured so an existing installation keeps its
+    // choice after the rename from "trackers" to "ads"; new writes use the new
+    // key.
+    if (d->store.contains(QLatin1String(kKeyBlockAds))) {
+        return d->store.value(QLatin1String(kKeyBlockAds), true).toBool();
+    }
+    return d->store.value(QStringLiteral("privacy/block_trackers"), true).toBool();
 }
 
-void Settings::setBlockTrackers(bool block)
+void Settings::setBlockAds(bool block)
 {
-    if (blockTrackers() == block) {
+    if (blockAds() == block) {
         return;
     }
-    d->store.setValue(QLatin1String(kKeyBlockTrackers), block);
-    emit trackerBlockingChanged();
+    d->store.setValue(QLatin1String(kKeyBlockAds), block);
+    emit adBlockingChanged();
+}
+
+QStringList Settings::adBlockAllowlist() const
+{
+    return d->store.value(QLatin1String(kKeyAdBlockAllowlist)).toStringList();
+}
+
+void Settings::allowSiteForAdBlock(const QString& host)
+{
+    const QString normalized = host.toLower().trimmed();
+    if (normalized.isEmpty()) {
+        return;
+    }
+    QStringList list = adBlockAllowlist();
+    if (list.contains(normalized)) {
+        return;
+    }
+    list.append(normalized);
+    d->store.setValue(QLatin1String(kKeyAdBlockAllowlist), list);
+    emit adBlockingChanged();
+}
+
+void Settings::disallowSiteForAdBlock(const QString& host)
+{
+    const QString normalized = host.toLower().trimmed();
+    QStringList list = adBlockAllowlist();
+    if (list.removeAll(normalized) == 0) {
+        return;
+    }
+    d->store.setValue(QLatin1String(kKeyAdBlockAllowlist), list);
+    emit adBlockingChanged();
+}
+
+bool Settings::isSiteAllowedForAdBlock(const QString& host) const
+{
+    return adBlockAllowlist().contains(host.toLower().trimmed());
 }
 
 bool Settings::sendDoNotTrack() const
@@ -345,7 +388,7 @@ void Settings::resetToDefaults()
     emit downloadDirectoryChanged();
     emit scrollModeChanged();
     emit cookiePolicyChanged();
-    emit trackerBlockingChanged();
+    emit adBlockingChanged();
     emit doNotTrackChanged();
     emit notificationsEnabledChanged();
     emit webrtcPolicyChanged();

@@ -4,6 +4,7 @@
 #include "ui/Icons.h"
 
 #include <QAbstractButton>
+#include <QColor>
 
 class QEnterEvent;
 class QMouseEvent;
@@ -31,6 +32,11 @@ public:
     void setShape(icons::Shape shape);
     void setIconSize(qreal size) { m_iconSize = size; update(); }
 
+    // Overrides the drawn icon colour. Used by the shield to stay muted when
+    // nothing is blocked even while hovered. An invalid colour restores the
+    // normal palette-driven colour.
+    void setIconColor(const QColor& color);
+
     [[nodiscard]] QSize sizeHint() const override;
 
 protected:
@@ -49,6 +55,7 @@ private:
 
     icons::Shape m_shape;
     qreal m_iconSize = 21.0;
+    QColor m_iconColor;  // invalid means "use the theme colour"
     qreal m_hover = 0.0;
     qreal m_press = 0.0;
     QVariantAnimation* m_hoverAnimation = nullptr;

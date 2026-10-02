@@ -6,6 +6,7 @@
 #include <QObject>
 #include <QScopedPointer>
 #include <QString>
+#include <QStringList>
 
 namespace yozora {
 
@@ -83,9 +84,16 @@ public:
     [[nodiscard]] bool keepCookiesOnExit() const;
     void setKeepCookiesOnExit(bool keep);
 
-    // Block requests to domains that appear in the bundled tracker list.
-    [[nodiscard]] bool blockTrackers() const;
-    void setBlockTrackers(bool block);
+    // Block requests that match the bundled advert and tracker filter lists.
+    [[nodiscard]] bool blockAds() const;
+    void setBlockAds(bool block);
+
+    // Sites the user has turned the shield off for. Matching is by exact host,
+    // so allowing "example.com" does not allow "ads.example.com".
+    [[nodiscard]] QStringList adBlockAllowlist() const;
+    void allowSiteForAdBlock(const QString& host);
+    void disallowSiteForAdBlock(const QString& host);
+    [[nodiscard]] bool isSiteAllowedForAdBlock(const QString& host) const;
 
     // Send the (advisory) DNT and Sec-GPC headers with every request.
     [[nodiscard]] bool sendDoNotTrack() const;
@@ -119,7 +127,7 @@ signals:
     void downloadDirectoryChanged();
     void scrollModeChanged();
     void cookiePolicyChanged();
-    void trackerBlockingChanged();
+    void adBlockingChanged();
     void doNotTrackChanged();
     void notificationsEnabledChanged();
     void webrtcPolicyChanged();

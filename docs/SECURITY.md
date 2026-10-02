@@ -99,13 +99,20 @@ Permissions are handled by Chromium's per-origin store through
 `LocalContentCanAccessFileUrls` are both off, and the navigation gate above
 blocks `file:` links from web content.
 
-## Tracker blocking
+## Ad and tracker blocking
 
-The request interceptor blocks requests to known tracker domains and can attach
-`DNT` / `Sec-GPC` headers. It runs on the Chromium IO thread and therefore only
-reads immutable snapshots and atomics; it never touches UI or `Settings`
-objects directly. Blocking is limited to known domains and never touches the
-user's own navigations.
+The request interceptor blocks requests that match the bundled ad and tracker
+filter lists and can attach `DNT` / `Sec-GPC` headers. It runs on the Chromium
+IO thread and therefore only reads immutable snapshots and atomics; it never
+touches UI or `Settings` objects directly. Matching is limited to the request
+URL, host, resource type and whether the request is third party. Blocking never
+touches the user's own navigations, and a site can be allowed by exact host
+through the shield.
+
+The rule engine is deliberately small and fails closed: any syntax it does not
+understand is ignored rather than guessed at, so a rule can never be applied
+more broadly than it was written. The lists are compiled into the binary as
+resources and are never downloaded at run time.
 
 ## Private browsing isolation
 

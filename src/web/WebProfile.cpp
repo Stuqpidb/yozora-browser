@@ -3,8 +3,8 @@
 
 #include "app/AppPaths.h"
 #include "core/Settings.h"
+#include "privacy/FilterEngine.h"
 #include "privacy/RequestInterceptor.h"
-#include "privacy/TrackerList.h"
 #include "utils/Version.h"
 
 #include <QDir>
@@ -110,8 +110,7 @@ void WebProfile::configureProfile()
 
     // Network level privacy (blocklist + DNT/GPC) lives in the interceptor.
     m_interceptor = new RequestInterceptor(m_settings, this);
-    m_interceptor->setTrackerList(
-        std::make_shared<const TrackerList>(TrackerList::load()));
+    m_interceptor->setFilterEngine(std::make_shared<const FilterEngine>(FilterEngine::load()));
     m_profile->setUrlRequestInterceptor(m_interceptor);
 }
 
@@ -133,7 +132,7 @@ void WebProfile::applyPrivacySettings()
     }
 
     if (m_interceptor && m_settings) {
-        m_interceptor->setBlockTrackersEnabled(m_settings->blockTrackers());
+        m_interceptor->setBlockAdsEnabled(m_settings->blockAds());
         m_interceptor->setSendDoNotTrackEnabled(m_settings->sendDoNotTrack());
     }
 }

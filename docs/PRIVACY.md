@@ -70,23 +70,35 @@ Deleting `profile\` resets the browser to a clean state.
 - "Keep cookies when Yozora closes" can be turned off, which makes every cookie
   session-only: they are gone when the browser exits.
 
-## Tracker blocking
+## Ad and tracker blocking
+
+Yozora ships a built-in blocker, in the spirit of Brave: no extension, no
+subscription, nothing downloaded at run time.
 
 ```
-bundled filter list  ──┐
-                       ├──►  URL interceptor  ──►  known tracker request blocked
-local blocklist.txt  ──┘
+bundled ad list      ─┐
+bundled tracker list ─┼──►  request interceptor  ──►  ad / tracker request blocked
+local blocklist.txt  ─┘
 ```
 
-- Yozora blocks requests to a curated list of well-known tracking, analytics
-  and advertising **domains**. It does not try to be a full ad blocker.
-- The list ships with the browser. It is never downloaded from a Yozora
-  server, and nothing is uploaded.
-- You can add your own rules in `privacy\blocklist.txt`. Only plain domain
-  rules and `||domain^` rules are understood; anything else is ignored. The
-  file is re-read on the next start.
-- A direct navigation to a listed domain is allowed: blocking is for trackers
-  embedded in other pages, not for where you choose to go.
+- Known advertising and tracking requests are blocked **before they are sent**,
+  straight in the network layer, on every site and in private windows.
+- The rules understand resource types (`$script`, `$image`, ...) and party
+  (`$third-party`), so a rule can be as narrow as "third-party scripts only".
+- The shield in the address bar shows how many requests were blocked on the
+  current page and lets a single site be allowed. An allowed site is remembered
+  by exact host.
+- A direct navigation the user typed is never blocked; blocking is for
+  third-party requests a page pulls in.
+- You can add your own rules in `privacy\blocklist.txt`. Only the rule syntax
+  above is understood; anything else is ignored.
+- The lists ship with the browser. Nothing is ever fetched from a Yozora server
+  and nothing is uploaded.
+
+It is a curated, hand-reviewed list rather than a giant public one, so it stays
+auditable and cannot break the web in surprising ways. It is not a complete
+substitute for the largest community lists.
+
 
 ## Permissions
 

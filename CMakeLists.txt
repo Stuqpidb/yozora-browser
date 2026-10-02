@@ -1,7 +1,7 @@
 cmake_minimum_required(VERSION 3.21)
 
 project(Yozora
-    VERSION 0.2.2
+    VERSION 0.2.4
     DESCRIPTION "Yozora Browser - a native desktop browser built with C++ and Qt WebEngine"
     HOMEPAGE_URL "https://github.com/Stuqpidb/yozora-browser"
     LANGUAGES CXX
@@ -94,12 +94,12 @@ add_library(yozora_core STATIC
     src/home/HomePage.h
     src/privacy/DownloadSafety.cpp
     src/privacy/DownloadSafety.h
+    src/privacy/FilterEngine.cpp
+    src/privacy/FilterEngine.h
     src/privacy/PermissionManager.cpp
     src/privacy/PermissionManager.h
     src/privacy/RequestInterceptor.cpp
     src/privacy/RequestInterceptor.h
-    src/privacy/TrackerList.cpp
-    src/privacy/TrackerList.h
     src/ui/AddressBar.cpp
     src/ui/AddressBar.h
     src/ui/ClearBrowsingDataDialog.cpp
@@ -121,6 +121,8 @@ add_library(yozora_core STATIC
     src/ui/SettingsDialog.h
     src/ui/SideBar.cpp
     src/ui/SideBar.h
+    src/ui/ShieldDialog.cpp
+    src/ui/ShieldDialog.h
     src/ui/TabStrip.cpp
     src/ui/TabStrip.h
     src/ui/TabWidget.cpp
@@ -192,12 +194,19 @@ set_target_properties(yozora PROPERTIES
 # a template: the version comes from PROJECT_VERSION, so the file properties can
 # never disagree with the About page or the installer.
 if(WIN32)
+    set(YOZORA_RC "${CMAKE_CURRENT_BINARY_DIR}/generated/yozora.rc")
     configure_file(
         "${CMAKE_CURRENT_SOURCE_DIR}/installer/yozora.rc.in"
-        "${CMAKE_CURRENT_BINARY_DIR}/generated/yozora.rc"
+        "${YOZORA_RC}"
         @ONLY
     )
-    target_sources(yozora PRIVATE "${CMAKE_CURRENT_BINARY_DIR}/generated/yozora.rc")
+    # rc.exe pulls the icon out of the .ico at compile time, but nothing in the
+    # generated build graph knows that: without this, replacing yozora.ico leaves
+    # the executable carrying the old icon and the build still reports success.
+    set_source_files_properties("${YOZORA_RC}" PROPERTIES
+        OBJECT_DEPENDS "${CMAKE_CURRENT_SOURCE_DIR}/installer/yozora.ico"
+    )
+    target_sources(yozora PRIVATE "${YOZORA_RC}")
 endif()
 
 # ---------------------------------------------------------------------------

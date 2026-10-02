@@ -1,6 +1,8 @@
 // SPDX-License-Identifier: MIT
 #include "core/Theme.h"
 
+#include "app/AppPaths.h"
+
 #include <QApplication>
 #include <QColor>
 #include <QFile>
@@ -14,8 +16,8 @@ namespace yozora {
 namespace {
 
 // The bundled typefaces. installer/make_fonts.py bakes the weights the
-// interface uses out of the upstream variable fonts; see resources/fonts/OFL.txt
-// for the licence.
+// interface uses out of the upstream variable fonts; see LICENSES/ for the
+// licence of each family.
 const QStringList kTextFaces = {
     QStringLiteral("Inter-Regular"),
     QStringLiteral("Inter-Medium"),
@@ -86,6 +88,7 @@ void Theme::loadFonts()
         return;
     }
     loaded = true;
+    AppPaths::ensureResourcesLoaded();
     // addApplicationFont() is handed the bytes rather than a path: the fonts
     // live in the executable's resource bundle, and the file overload has to be
     // told about the size or it will read a resource as if it were on disk.
@@ -488,22 +491,46 @@ QListWidget::item { padding: 7px 10px; border-radius: 8px; color: %TEXT%; }
 QListWidget::item:hover { background: %SURFACE_HOVER%; }
 QListWidget::item:selected { background: %SURFACE_ACTIVE%; color: %TEXT%; }
 
-QListWidget#settingsNav {
-    background: %RAIL%;
-    border: none;
+/* ---- Settings navigation ---------------------------------------------- */
+/* A branded column: a wordmark band on top, the section rows below. The rows
+   are painted by SettingsNavDelegate (see SettingsDialog.cpp), so the list
+   itself stays transparent and only the delegate draws the icon, the label and
+   the highlight. This is what makes the settings navigation match the rail. */
+QWidget#settingsNavColumn {
+    background: qlineargradient(x1:0, y1:0, x2:1, y2:0,
+        stop:0 %GLASS_RAIL%, stop:1 %GLASS_RAIL_EDGE%);
     border-right: 1px solid %BORDER%;
-    border-radius: 0;
-    padding: 16px 12px;
-    font-size: 13px;
 }
-QListWidget#settingsNav::item {
-    padding: 10px 12px;
-    border-radius: 10px;
+QWidget#settingsBrand { background: transparent; border-bottom: 1px solid %BORDER%; }
+QLabel#settingsBrandWord {
+    color: %TEXT%;
+    font-family: "%DISPLAY_FONT%";
+    font-size: 19px;
+    font-weight: 700;
+    letter-spacing: 0.01em;
+}
+QLabel#settingsBrandCaption {
     color: %TEXT_MUTED%;
-    margin: 3px 0;
+    font-size: 10px;
+    font-weight: 600;
+    letter-spacing: 0.24em;
 }
-QListWidget#settingsNav::item:hover { background: %SURFACE_HOVER%; color: %TEXT%; }
-QListWidget#settingsNav::item:selected { background: %SURFACE_ACTIVE%; color: %TEXT%; }
+QListWidget#settingsNav {
+    background: transparent;
+    border: none;
+    outline: none;
+    padding: 10px 6px;
+}
+/* The delegate owns the row layout, so the generic list item padding has to be
+   cancelled here or it would inset the icon and the text a second time. */
+QListWidget#settingsNav::item {
+    background: transparent;
+    border: none;
+    padding: 0;
+    margin: 0;
+}
+QListWidget#settingsNav::item:hover,
+QListWidget#settingsNav::item:selected { background: transparent; }
 
 /* ---- Settings pages --------------------------------------------------- */
 /* Each section is a header band plus a scrolling body. The cards inside are the

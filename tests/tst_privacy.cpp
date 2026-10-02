@@ -6,7 +6,7 @@
 
 #include "core/SearchEngine.h"
 #include "privacy/DownloadSafety.h"
-#include "privacy/TrackerList.h"
+#include "privacy/FilterEngine.h"
 
 #include "TestMain.h"
 
@@ -22,11 +22,16 @@ class TestPrivacy : public QObject {
     Q_OBJECT
 
 private slots:
-    // --- tracker list -----------------------------------------------------
+    // --- filter engine ----------------------------------------------------
     void parsesDomainRules_data();
     void parsesDomainRules();
     void matchesDomainAndSubdomains();
     void ignoresUnsupportedRules();
+    void parsesTypeAndPartyOptions();
+    void blocksByTypeAndParty();
+    void parsesSubstringRules();
+    void classifiesAdsVsTrackers();
+    void bundledListsLoad();
 
     // --- download safety --------------------------------------------------
     void sanitizesFileNames_data();
@@ -59,7 +64,7 @@ void TestPrivacy::parsesDomainRules_data()
     QTest::newRow("bang comment") << QStringLiteral("! uBlock comment") << QString();
     QTest::newRow("blank") << QStringLiteral("   ") << QString();
     QTest::newRow("with path") << QStringLiteral("||tracker.example/path^") << QString();
-    QTest::newRow("wildcard") << QStringLiteral("*.tracker.example") << QString();
+    QTest::newRow("wildcard domain") << QStringLiteral("*.tracker.example") << QString();
     QTest::newRow("no dot") << QStringLiteral("localhost") << QString();
 }
 
@@ -67,33 +72,115 @@ void TestPrivacy::parsesDomainRules()
 {
     QFETCH(QString, rule);
     QFETCH(QString, expected);
-    QCOMPARE(TrackerList::domainFromRule(rule), expected);
+    FilterRule parsed;
+    const bool ok = FilterEngine::parseRule(rule, QStringLiteral("tracker"), &parsed);
+    QCOMPARE(ok ? parsed.value : QString(), expected);
 }
 
 void TestPrivacy::matchesDomainAndSubdomains()
 {
-    const TrackerList list = TrackerList::fromLines(
-        {QStringLiteral("||tracker.example^"), QStringLiteral("analytics.example")});
+    const FilterEngine engine = FilterEngine::fromLines(
+        {QStringLiteral("||tracker.example^")},
+        {QStringLiteral("||analytics.example^")});
 
-    QVERIFY(list.isBlocked(QStringLiteral("tracker.example")));
-    QVERIFY(list.isBlocked(QStringLiteral("cdn.tracker.example")));
-    QVERIFY(list.isBlocked(QStringLiteral("a.b.tracker.example")));
-    QVERIFY(list.isBlocked(QStringLiteral("ANALYTICS.EXAMPLE")));
+    QVERIFY(engine.shouldBlock(QStringLiteral("https://tracker.example/a"),
+                               QStringLiteral("tracker.example"), ResourceType::Script, true));
+    QVERIFY(engine.shouldBlock(QStringLiteral("https://cdn.tracker.example/a"),
+                               QStringLiteral("cdn.tracker.example"), ResourceType::Image, true));
+    QVERIFY(engine.shouldBlock(QStringLiteral("https://ANALYTICS.EXAMPLE/a"),
+                               QStringLiteral("ANALYTICS.EXAMPLE"), ResourceType::Script, true));
 
-    QVERIFY(!list.isBlocked(QStringLiteral("example")));
-    QVERIFY(!list.isBlocked(QStringLiteral("tracker.example.evil.com")));
-    QVERIFY(!list.isBlocked(QString()));
-    QVERIFY(!list.isBlocked(QStringLiteral("unrelated.test")));
+    QVERIFY(!engine.shouldBlock(QStringLiteral("https://example.com/a"),
+                                QStringLiteral("example"), ResourceType::Script, true));
+    QVERIFY(!engine.shouldBlock(QStringLiteral("https://tracker.example.evil.com/a"),
+                                QStringLiteral("tracker.example.evil.com"), ResourceType::Script,
+                                true));
 }
 
 void TestPrivacy::ignoresUnsupportedRules()
 {
-    const TrackerList list =
-        TrackerList::fromLines({QStringLiteral("||a.example^"), QStringLiteral("||b.example/path")});
-    QVERIFY(list.isBlocked(QStringLiteral("a.example")));
-    // The rule with a path was skipped, so its domain is not blocked.
-    QVERIFY(!list.isBlocked(QStringLiteral("b.example")));
-    QCOMPARE(list.size(), 1);
+    // A path on an anchor rule is not a plain domain rule and is skipped.
+    FilterRule parsed;
+    QVERIFY(!FilterEngine::parseRule(QStringLiteral("||b.example/path"), QStringLiteral("ad"),
+                                     &parsed));
+    // A negated type option is unsupported, so the rule is skipped.
+    QVERIFY(!FilterEngine::parseRule(QStringLiteral("||b.example^$~image"), QStringLiteral("ad"),
+                                     &parsed));
+}
+
+void TestPrivacy::parsesTypeAndPartyOptions()
+{
+    FilterRule parsed;
+    QVERIFY(FilterEngine::parseRule(QStringLiteral("||ads.example^$script,third-party"),
+                                    QStringLiteral("ad"), &parsed));
+    QVERIFY(parsed.kind == FilterRule::Kind::Domain);
+    QCOMPARE(parsed.value, QStringLiteral("ads.example"));
+    QVERIFY(parsed.matchThirdPartyOnly);
+    QVERIFY(parsed.hasType(ResourceType::Script));
+    QVERIFY(!parsed.hasType(ResourceType::Image));
+}
+
+void TestPrivacy::blocksByTypeAndParty()
+{
+    // Rule only matches third-party scripts.
+    const FilterEngine engine = FilterEngine::fromLines(
+        {QStringLiteral("||ads.example^$script,third-party")}, {});
+
+    QVERIFY(engine.shouldBlock(QStringLiteral("https://ads.example/a.js"),
+                               QStringLiteral("ads.example"), ResourceType::Script, true));
+    // First party: not blocked.
+    QVERIFY(!engine.shouldBlock(QStringLiteral("https://ads.example/a.js"),
+                                QStringLiteral("ads.example"), ResourceType::Script, false));
+    // Wrong type: not blocked.
+    QVERIFY(!engine.shouldBlock(QStringLiteral("https://ads.example/a.png"),
+                                QStringLiteral("ads.example"), ResourceType::Image, true));
+}
+
+void TestPrivacy::parsesSubstringRules()
+{
+    const FilterEngine engine =
+        FilterEngine::fromLines({QStringLiteral("/pagead/")}, {});
+    QVERIFY(engine.shouldBlock(QStringLiteral("https://host.example/pagead/banner.js"),
+                               QStringLiteral("host.example"), ResourceType::Script, false));
+    QVERIFY(!engine.shouldBlock(QStringLiteral("https://host.example/content.js"),
+                                QStringLiteral("host.example"), ResourceType::Script, false));
+}
+
+void TestPrivacy::classifiesAdsVsTrackers()
+{
+    const FilterEngine engine = FilterEngine::fromLines({QStringLiteral("||ads.example^")},
+                                                        {QStringLiteral("||track.example^")});
+    QCOMPARE(engine.classify(QStringLiteral("https://ads.example/x"),
+                             QStringLiteral("ads.example"), ResourceType::Script, true),
+             FilterEngine::Category::Ad);
+    QCOMPARE(engine.classify(QStringLiteral("https://track.example/x"),
+                             QStringLiteral("track.example"), ResourceType::Script, true),
+             FilterEngine::Category::Tracker);
+    QCOMPARE(engine.classify(QStringLiteral("https://ok.example/x"),
+                             QStringLiteral("ok.example"), ResourceType::Script, true),
+             FilterEngine::Category::None);
+}
+
+void TestPrivacy::bundledListsLoad()
+{
+    // The bundled lists are compiled into the resource system. Loading them here
+    // proves the resource paths match what FilterEngine::load() expects and that
+    // the files contain real rules, so a rename or an empty file cannot silently
+    // disable ad blocking in a release build.
+    const FilterEngine engine = FilterEngine::load();
+    QVERIFY2(engine.size() > 50, qPrintable(QStringLiteral("only %1 rules loaded")
+                                                .arg(engine.size())));
+
+    QVERIFY(engine.shouldBlock(QStringLiteral("https://doubleclick.net/ad.js"),
+                               QStringLiteral("doubleclick.net"), ResourceType::Script, true));
+    QVERIFY(engine.shouldBlock(QStringLiteral("https://www.google-analytics.com/collect"),
+                               QStringLiteral("www.google-analytics.com"), ResourceType::Script,
+                               true));
+    QVERIFY(engine.shouldBlock(QStringLiteral("https://site.example/pagead/banner.png"),
+                               QStringLiteral("site.example"), ResourceType::Image, true));
+    // An ordinary asset on an ordinary site is not blocked.
+    QVERIFY(!engine.shouldBlock(QStringLiteral("https://site.example/assets/app.js"),
+                                QStringLiteral("site.example"), ResourceType::Script, true));
 }
 
 void TestPrivacy::sanitizesFileNames_data()

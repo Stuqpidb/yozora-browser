@@ -44,6 +44,21 @@ if(WIN32)
     ")
 endif()
 
+# --- Licence texts ----------------------------------------------------------
+# The staged folder ships Qt's shared libraries, and those are licensed under
+# terms of their own. The texts therefore have to travel with the binaries: a
+# distribution that conveys no licence conveys no permission either, and the
+# person who just installed this has no way to find out what they may do with
+# it. LICENSES/THIRD-PARTY-NOTICES.txt explains which option of Qt's licence
+# choice was taken and how to exercise the LGPLv3 relinking right.
+install(FILES "${CMAKE_CURRENT_SOURCE_DIR}/LICENSE"
+        DESTINATION "licenses"
+        RENAME "LICENSE-Yozora-MIT.txt")
+install(DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}/LICENSES/"
+        DESTINATION "licenses"
+        FILES_MATCHING
+        PATTERN "*.txt")
+
 # --- Windows installer ------------------------------------------------------
 if(WIN32)
     set(CPACK_GENERATOR "NSIS")
@@ -61,14 +76,46 @@ if(WIN32)
     set(CPACK_NSIS_ENABLE_UNINSTALL_BEFORE_INSTALL ON)
     set(CPACK_NSIS_MODIFY_PATH OFF)
     set(CPACK_NSIS_EXECUTABLES_DIRECTORY ".")
-    # Start menu and desktop entries. These take a bare target name from
+    # Start menu entry. It takes a bare target name from
     # CPACK_PACKAGE_EXECUTABLES; CPACK_NSIS_MENU_LINKS (which would create an
     # extra sub-folder) is deliberately left unset so the shortcut sits
     # directly in the Programs folder, the way Firefox and Chrome do it.
-    set(CPACK_NSIS_CREATE_START_MENU_LINKS "Yozora")
-    set(CPACK_NSIS_CREATE_DESKTOP_LINKS "Yozora")
+    #
+    # The desktop shortcut is offered as a checkbox by the installer's own
+    # "Install Options" page. CPack reads that checkbox into $INSTALL_DESKTOP
+    # but never acts on it, so the two hooks below are what make it real: one
+    # creates the link when the box was ticked, the other removes it on
+    # uninstall. (CPACK_CREATE_DESKTOP_LINKS would force the link on everyone
+    # and ignore the checkbox, which is not what we want.)
+    # The values are inserted verbatim into CPackConfig.cmake, so '$' is escaped
+    # (otherwise CMake would expand $INSTALL_DESKTOP when CPack includes that
+    # file) and NSIS single quotes are used so no double quotes appear at all.
+    set(CPACK_NSIS_EXTRA_INSTALL_COMMANDS
+        "  StrCmp \\\$INSTALL_DESKTOP '1' 0 +2\n    CreateShortCut '\\\$DESKTOP\\\\Yozora Browser.lnk' '\\\$INSTDIR\\\\Yozora.exe'\n")
+    set(CPACK_NSIS_EXTRA_UNINSTALL_COMMANDS
+        "  StrCmp \\\$INSTALL_DESKTOP '1' 0 +2\n    Delete '\\\$DESKTOP\\\\Yozora Browser.lnk'\n")
+
+    # Branding: the NSIS wizard's default bitmaps and titles are replaced with
+    # the app's own artwork (see installer/make_installer_art.py), the finish
+    # page offers to launch the browser, and the installer is DPI-aware.
+    set(CPACK_NSIS_WELCOME_TITLE "Welcome to Yozora Browser")
+    set(CPACK_NSIS_FINISH_TITLE "Yozora Browser is installed")
+    set(CPACK_NSIS_MUI_WELCOMEFINISHPAGE_BITMAP
+        "${PROJECT_SOURCE_DIR}/resources/installer/welcome.bmp")
+    set(CPACK_NSIS_MUI_UNWELCOMEFINISHPAGE_BITMAP
+        "${PROJECT_SOURCE_DIR}/resources/installer/welcome-uninstall.bmp")
+    set(CPACK_NSIS_MUI_HEADERIMAGE
+        "${PROJECT_SOURCE_DIR}/resources/installer/header.bmp")
+    set(CPACK_NSIS_MUI_FINISHPAGE_RUN "Yozora.exe")
+    set(CPACK_NSIS_MUI_FINISHPAGE_RUN_TEXT "Launch Yozora Browser")
+    set(CPACK_NSIS_MANIFEST_DPI_AWARE ON)
+    set(CPACK_NSIS_BRANDING_TEXT "Yozora Browser ${PROJECT_VERSION}")
+
     set(CPACK_NSIS_URL_INFO_ABOUT "${PROJECT_HOMEPAGE_URL}")
-    set(CPACK_NSIS_INSTALLED_ICON_NAME "${PROJECT_NAME}.ico")
+    # The licence page shows the project's own MIT licence instead of the
+    # placeholder text CPack ships.
+    set(CPACK_RESOURCE_FILE_LICENSE "${CMAKE_CURRENT_SOURCE_DIR}/LICENSE")
+    set(CPACK_NSIS_INSTALLED_ICON_NAME "Yozora.exe")
     set(CPACK_NSIS_MUI_ICON "${PROJECT_SOURCE_DIR}/installer/yozora.ico")
     set(CPACK_NSIS_MUI_UNIICON "${PROJECT_SOURCE_DIR}/installer/yozora.ico")
     set(CPACK_NSIS_MUI_UNICON "${PROJECT_SOURCE_DIR}/installer/yozora.ico")

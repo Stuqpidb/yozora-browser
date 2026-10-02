@@ -11,6 +11,7 @@ set(YOZORA_TESTS
     tst_glass
     tst_library
     tst_nightsky
+    tst_privacy
     tst_update
 )
 

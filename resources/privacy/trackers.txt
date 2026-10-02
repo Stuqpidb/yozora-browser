@@ -1,8 +1,9 @@
 # Yozora Browser - built-in tracker blocklist
 #
-# This is a small, curated list of well known tracking, analytics and
-# advertising domains. It is deliberately NOT a full ad-blocking list: Yozora
-# blocks known trackers, not every advertisement. Only plain domain rules and
+# This is a small, curated list of well known tracking and analytics domains.
+# Advertising is handled by the separate ads.txt list; together they are the
+# built-in blocker. Like that list this is hand-reviewed rather than a copy of a
+# giant public list, so it stays auditable. Only plain domain rules and
 # adblock-style "||domain^" rules are understood; any other syntax is ignored.
 #
 #   domain.com          blocks domain.com and every subdomain of it

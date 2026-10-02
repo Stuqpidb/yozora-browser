@@ -35,6 +35,17 @@ enum class Shape {
     Magnifier,
     ArrowRight,
     More,   // three dots: "more options"
+    // The ad/tracker shield, used both in the address bar and as the Privacy
+    // section glyph.
+    Shield,
+    // Section glyphs for the settings navigation. Kept in the same grid and
+    // stroke as the toolbar icons so the two never look like different sets.
+    Home,
+    Download,
+    Wheel,
+    Database,
+    Key,
+    Info,
 };
 
 inline void stroke(QPainter& painter, const QPainterPath& path, const QColor& color,
@@ -178,6 +189,115 @@ inline void draw(QPainter& painter, Shape shape, const QRectF& box, const QColor
             for (const qreal x : {6.0, 12.0, 18.0}) {
                 painter.drawEllipse(QPointF(x, 12), 1.8, 1.8);
             }
+            break;
+        }
+        case Shape::Home: {
+            QPainterPath roof;
+            roof.moveTo(3.5, 11);
+            roof.lineTo(12, 4);
+            roof.lineTo(20.5, 11);
+            stroke(painter, roof, color, width);
+            QPainterPath body;
+            body.moveTo(6, 10.2);
+            body.lineTo(6, 20);
+            body.lineTo(18, 20);
+            body.lineTo(18, 10.2);
+            stroke(painter, body, color, width);
+            break;
+        }
+        case Shape::Download: {
+            QPainterPath stem;
+            stem.moveTo(12, 4);
+            stem.lineTo(12, 15);
+            stroke(painter, stem, color, width);
+            QPainterPath head;
+            head.moveTo(7.5, 10.5);
+            head.lineTo(12, 15);
+            head.lineTo(16.5, 10.5);
+            stroke(painter, head, color, width);
+            QPainterPath tray;
+            tray.moveTo(5, 19.5);
+            tray.lineTo(19, 19.5);
+            stroke(painter, tray, color, width);
+            break;
+        }
+        case Shape::Shield: {
+            QPainterPath path;
+            path.moveTo(12, 3.5);
+            path.lineTo(19, 6.2);
+            path.lineTo(19, 11.5);
+            path.cubicTo(19, 16.4, 15.6, 19.5, 12, 20.7);
+            path.cubicTo(8.4, 19.5, 5, 16.4, 5, 11.5);
+            path.lineTo(5, 6.2);
+            path.closeSubpath();
+            stroke(painter, path, color, width);
+            break;
+        }
+        case Shape::Wheel: {
+            QPainterPath body;
+            body.addRoundedRect(QRectF(6.5, 3.5, 11, 17), 5.5, 5.5);
+            stroke(painter, body, color, width);
+            QPainterPath line;
+            line.moveTo(12, 7.5);
+            line.lineTo(12, 10.3);
+            stroke(painter, line, color, width);
+            QPainterPath up;
+            up.moveTo(9.9, 13.1);
+            up.lineTo(12, 11);
+            up.lineTo(14.1, 13.1);
+            stroke(painter, up, color, width);
+            QPainterPath down;
+            down.moveTo(9.9, 16.7);
+            down.lineTo(12, 18.8);
+            down.lineTo(14.1, 16.7);
+            stroke(painter, down, color, width);
+            break;
+        }
+        case Shape::Database: {
+            QPainterPath top;
+            top.addEllipse(QRectF(5, 3.5, 14, 5));
+            stroke(painter, top, color, width);
+            QPainterPath sides;
+            sides.moveTo(5, 6);
+            sides.lineTo(5, 18);
+            sides.moveTo(19, 6);
+            sides.lineTo(19, 18);
+            stroke(painter, sides, color, width);
+            QPainterPath bottom;
+            bottom.moveTo(5, 18);
+            bottom.cubicTo(5, 20.8, 19, 20.8, 19, 18);
+            stroke(painter, bottom, color, width);
+            QPainterPath middle;
+            middle.moveTo(5, 12);
+            middle.cubicTo(5, 14.8, 19, 14.8, 19, 12);
+            stroke(painter, middle, color, width);
+            break;
+        }
+        case Shape::Key: {
+            QPainterPath ring;
+            ring.addEllipse(QRectF(3.5, 8, 8, 8));
+            stroke(painter, ring, color, width);
+            QPainterPath shaft;
+            shaft.moveTo(11.5, 12);
+            shaft.lineTo(20.5, 12);
+            shaft.moveTo(17, 12);
+            shaft.lineTo(17, 15.4);
+            shaft.moveTo(20.5, 12);
+            shaft.lineTo(20.5, 14.6);
+            stroke(painter, shaft, color, width);
+            break;
+        }
+        case Shape::Info: {
+            QPainterPath ring;
+            ring.addEllipse(QRectF(3.5, 3.5, 17, 17));
+            stroke(painter, ring, color, width);
+            painter.setPen(Qt::NoPen);
+            painter.setBrush(color);
+            painter.drawEllipse(QPointF(12, 7.8), 1.25, 1.25);
+            QPainterPath stem;
+            stem.moveTo(12, 10.8);
+            stem.lineTo(12, 16.8);
+            stroke(painter, stem, color, width);
             break;
         }
     }

@@ -1,9 +1,11 @@
 // SPDX-License-Identifier: MIT
 #include "ui/NavigationBar.h"
 
+#include "core/Theme.h"
 #include "ui/AddressBar.h"
 #include "ui/NavButton.h"
 
+#include <QColor>
 #include <QHBoxLayout>
 #include <QLabel>
 #include <QProgressBar>
@@ -69,6 +71,11 @@ NavigationBar::NavigationBar(QWidget* parent)
     m_privateBadge->setVisible(false);
     m_layout->addWidget(m_privateBadge);
 
+    // The shield, in the spirit of Brave: one click shows what was blocked on
+    // this page and offers to allow the site.
+    m_shieldButton = makeButton(icons::Shape::Shield, tr("Ads and trackers blocked on this page"));
+    connect(m_shieldButton, &NavButton::clicked, this, &NavigationBar::shieldRequested);
+
     m_starButton = makeButton(icons::Shape::Star, tr("Bookmark this page"));
     m_starButton->setCheckable(true);
     connect(m_starButton, &NavButton::clicked, this, &NavigationBar::bookmarkRequested);
@@ -131,6 +138,23 @@ void NavigationBar::setBookmarked(bool bookmarked)
 void NavigationBar::setPrivateMode(bool enabled)
 {
     m_privateBadge->setVisible(enabled);
+}
+
+void NavigationBar::setShieldState(int blocked, bool enabled)
+{
+    // The glyph is accented when the shield is on and something was blocked, so
+    // the state is readable at a glance without opening the panel.
+    const auto colors = Theme::colors();
+    const QColor muted(colors.textMuted);
+    const QColor accent(colors.accent);
+    m_shieldButton->setIconColor(enabled && blocked > 0 ? accent : muted);
+    if (!enabled) {
+        m_shieldButton->setToolTip(tr("Tracking protection is off"));
+    } else if (blocked > 0) {
+        m_shieldButton->setToolTip(tr("%n item(s) blocked on this page", "", blocked));
+    } else {
+        m_shieldButton->setToolTip(tr("Nothing blocked on this page"));
+    }
 }
 
 void NavigationBar::showMessage(const QString& message)

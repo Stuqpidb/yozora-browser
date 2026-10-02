@@ -9,19 +9,72 @@
 
 namespace yozora {
 
+namespace {
+
+// Maps Qt's resource type onto the filter engine's type enum.
+ResourceType resourceTypeOf(QWebEngineUrlRequestInfo::ResourceType type)
+{
+    using T = QWebEngineUrlRequestInfo::ResourceType;
+    switch (type) {
+        case T::ResourceTypeScript:
+            return ResourceType::Script;
+        case T::ResourceTypeImage:
+            return ResourceType::Image;
+        case T::ResourceTypeStylesheet:
+            return ResourceType::Stylesheet;
+        case T::ResourceTypeFontResource:
+            return ResourceType::Font;
+        case T::ResourceTypeMedia:
+            return ResourceType::Media;
+        case T::ResourceTypeXhr:
+            return ResourceType::XmlHttpRequest;
+        case T::ResourceTypeSubFrame:
+        case T::ResourceTypeSubResource:
+            return ResourceType::Subdocument;
+        case T::ResourceTypePing:
+            return ResourceType::Ping;
+        case T::ResourceTypeWebSocket:
+            return ResourceType::Websocket;
+        default:
+            return ResourceType::Other;
+    }
+}
+
+}  // namespace
+
+void BlockingStats::reset()
+{
+    m_total = 0;
+    m_perPage.clear();
+}
+
+void BlockingStats::record(const QString& pageUrl, FilterEngine::Category category)
+{
+    Q_UNUSED(category)
+    ++m_total;
+    if (!pageUrl.isEmpty()) {
+        ++m_perPage[pageUrl];
+    }
+}
+
+int BlockingStats::blockedForPage(const QString& pageUrl) const
+{
+    return m_perPage.value(pageUrl, 0);
+}
+
 RequestInterceptor::RequestInterceptor(Settings* settings, QObject* parent)
     : QWebEngineUrlRequestInterceptor(parent)
     , m_settings(settings)
 {
     if (m_settings) {
-        m_blockTrackers.store(m_settings->blockTrackers());
+        m_blockAds.store(m_settings->blockAds());
         m_sendDnt.store(m_settings->sendDoNotTrack());
 
         // The user can flip these while pages are open; the IO thread only ever
         // sees the atomics, so no GUI object is touched from there.
-        connect(m_settings, &Settings::trackerBlockingChanged, this, [this] {
+        connect(m_settings, &Settings::adBlockingChanged, this, [this] {
             if (m_settings) {
-                setBlockTrackersEnabled(m_settings->blockTrackers());
+                setBlockAdsEnabled(m_settings->blockAds());
             }
         });
         connect(m_settings, &Settings::doNotTrackChanged, this, [this] {
@@ -32,15 +85,15 @@ RequestInterceptor::RequestInterceptor(Settings* settings, QObject* parent)
     }
 }
 
-void RequestInterceptor::setTrackerList(std::shared_ptr<const TrackerList> list)
+void RequestInterceptor::setFilterEngine(std::shared_ptr<const FilterEngine> engine)
 {
-    const std::lock_guard<std::mutex> lock(m_listMutex);
-    m_list = std::move(list);
+    const std::lock_guard<std::mutex> lock(m_engineMutex);
+    m_engine = std::move(engine);
 }
 
-void RequestInterceptor::setBlockTrackersEnabled(bool enabled)
+void RequestInterceptor::setBlockAdsEnabled(bool enabled)
 {
-    m_blockTrackers.store(enabled);
+    m_blockAds.store(enabled);
 }
 
 void RequestInterceptor::setSendDoNotTrackEnabled(bool enabled)
@@ -48,10 +101,10 @@ void RequestInterceptor::setSendDoNotTrackEnabled(bool enabled)
     m_sendDnt.store(enabled);
 }
 
-std::shared_ptr<const TrackerList> RequestInterceptor::trackerList() const
+std::shared_ptr<const FilterEngine> RequestInterceptor::filterEngine() const
 {
-    const std::lock_guard<std::mutex> lock(m_listMutex);
-    return m_list;
+    const std::lock_guard<std::mutex> lock(m_engineMutex);
+    return m_engine;
 }
 
 void RequestInterceptor::interceptRequest(QWebEngineUrlRequestInfo& info)
@@ -71,7 +124,7 @@ void RequestInterceptor::interceptRequest(QWebEngineUrlRequestInfo& info)
         info.setHttpHeader(QByteArrayLiteral("Sec-GPC"), QByteArrayLiteral("1"));
     }
 
-    if (!m_blockTrackers.load()) {
+    if (!m_blockAds.load()) {
         return;
     }
 
@@ -88,11 +141,29 @@ void RequestInterceptor::interceptRequest(QWebEngineUrlRequestInfo& info)
         }
     }
 
-    const std::shared_ptr<const TrackerList> list = trackerList();
-    if (list && list->isBlocked(url.host())) {
-        info.block(true);
-        m_blocked.fetch_add(1, std::memory_order_relaxed);
+    const std::shared_ptr<const FilterEngine> engine = filterEngine();
+    if (!engine) {
+        return;
     }
+
+    // Third party means the request host differs from the site the user is on.
+    const QString firstPartyHost = info.firstPartyUrl().host().toLower();
+    const QString requestHost = url.host().toLower();
+    const bool thirdParty = !firstPartyHost.isEmpty() && requestHost != firstPartyHost
+                            && !requestHost.endsWith(QLatin1Char('.') + firstPartyHost);
+
+    const ResourceType type = resourceTypeOf(info.resourceType());
+    if (!engine->shouldBlock(url.toString(), requestHost, type, thirdParty)) {
+        return;
+    }
+
+    info.block(true);
+    m_blocked.fetch_add(1, std::memory_order_relaxed);
+    // The signal is emitted from the IO thread; Qt queues it to the GUI thread
+    // because the receiver lives there. Only plain values cross the boundary.
+    emit requestBlocked(info.firstPartyUrl().toString(),
+                        static_cast<int>(engine->classify(url.toString(), requestHost, type,
+                                                          thirdParty)));
 }
 
 }  // namespace yozora

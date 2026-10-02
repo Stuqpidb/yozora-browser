@@ -105,6 +105,14 @@ IndexedDB/
 databases/
 crashpad/
 
+# Local user state written at runtime: history, bookmarks and pinned sites.
+# These live under the platform application-data directory, never in the tree,
+# but listing them makes an accidental copy inside the repository impossible to
+# commit.
+bookmarks.json
+history.json
+pinned-sites.json
+
 # Secrets - must never be committed
 .env
 .env.*

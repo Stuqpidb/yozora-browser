@@ -11,11 +11,13 @@
 #include "core/UpdateChecker.h"
 #include "home/HomePage.h"
 #include "privacy/PermissionManager.h"
+#include "privacy/RequestInterceptor.h"
 #include "ui/AddressBar.h"
 #include "ui/ClearBrowsingDataDialog.h"
 #include "ui/LibraryDialog.h"
 #include "ui/NavigationBar.h"
 #include "ui/SettingsDialog.h"
+#include "ui/ShieldDialog.h"
 #include "ui/SideBar.h"
 #include "ui/TabStrip.h"
 #include "ui/UpdateDialog.h"
@@ -203,8 +205,20 @@ void BrowserWindow::buildUi()
     connect(m_navBar, &NavigationBar::stopRequested, this, &BrowserWindow::stop);
     connect(m_navBar, &NavigationBar::menuRequested, this, &BrowserWindow::buildMenu);
     connect(m_navBar, &NavigationBar::bookmarkRequested, this, &BrowserWindow::toggleBookmark);
+    connect(m_navBar, &NavigationBar::shieldRequested, this, &BrowserWindow::showShield);
     connect(m_navBar->addressBar(), &AddressBar::navigationRequested, this,
             &BrowserWindow::navigateInput);
+
+    // Per-page blocking counts for the shield. The interceptor runs on the IO
+    // thread and its signal is queued here; only plain values are carried.
+    if (m_profile && m_profile->interceptor()) {
+        connect(m_profile->interceptor(), &RequestInterceptor::requestBlocked, this,
+                [this](const QString& pageUrl, int category) {
+                    m_blockingStats.record(pageUrl,
+                                           static_cast<FilterEngine::Category>(category));
+                    updateShieldState();
+                });
+    }
 
     connect(m_downloads, &DownloadManager::downloadStarted, this,
             [this](const QString& name) { showStatusMessage(tr("Downloading %1").arg(name)); });
@@ -730,6 +744,9 @@ void BrowserWindow::buildMenu(const QPoint& globalPos)
     QAction* bookmarkAction = menu.addAction(tr("Bookmark this page\tCtrl+D"));
     connect(bookmarkAction, &QAction::triggered, this, &BrowserWindow::toggleBookmark);
 
+    QAction* shieldAction = menu.addAction(tr("Ads and trackers blocked..."));
+    connect(shieldAction, &QAction::triggered, this, &BrowserWindow::showShield);
+
     QAction* bookmarksAction = menu.addAction(tr("Bookmarks\tCtrl+Shift+O"));
     connect(bookmarksAction, &QAction::triggered, this, [this] { showLibrary(true); });
 
@@ -781,7 +798,62 @@ void BrowserWindow::updateForActiveTab()
     m_navBar->addressBar()->displayUrl(tab->url());
     m_sideBar->setHomeActive(tab->isStartPage());
     updateBookmarkStar();
+    updateShieldState();
     refreshTabStrip();
+}
+
+void BrowserWindow::updateShieldState()
+{
+    if (!m_navBar) {
+        return;
+    }
+    auto* tab = currentTab();
+    const QUrl url = tab ? tab->url() : QUrl();
+    const QString pageUrl = url.toString();
+    const int blocked = pageUrl.isEmpty() ? 0 : m_blockingStats.blockedForPage(pageUrl);
+    const bool enabled = m_settings ? m_settings->blockAds() : true;
+    m_navBar->setShieldState(blocked, enabled);
+}
+
+void BrowserWindow::showShield()
+{
+    auto* tab = currentTab();
+    const QUrl url = tab ? tab->url() : QUrl();
+    const QString host = url.host().toLower();
+    const QString pageUrl = url.toString();
+    const int blocked = pageUrl.isEmpty() ? 0 : m_blockingStats.blockedForPage(pageUrl);
+    const bool enabled = m_settings ? m_settings->blockAds() : true;
+    const bool allowed = m_settings && !host.isEmpty()
+                         && m_settings->isSiteAllowedForAdBlock(host);
+
+    if (!m_shieldDialog) {
+        m_shieldDialog = new ShieldDialog(this);
+        m_shieldDialog->setAttribute(Qt::WA_DeleteOnClose);
+        connect(m_shieldDialog, &ShieldDialog::siteAllowedChanged, this,
+                [this](bool allow) {
+                    auto* current = currentTab();
+                    const QString currentHost =
+                        current ? current->url().host().toLower() : QString();
+                    if (currentHost.isEmpty() || !m_settings) {
+                        return;
+                    }
+                    if (allow) {
+                        m_settings->allowSiteForAdBlock(currentHost);
+                    } else {
+                        m_settings->disallowSiteForAdBlock(currentHost);
+                    }
+                    updateShieldState();
+                    // A reload is the only way to bring blocked requests back
+                    // once the site is allowed (or drop them once blocked).
+                    if (current) {
+                        current->reload();
+                    }
+                });
+    }
+    m_shieldDialog->setSite(host, blocked, enabled, allowed);
+    m_shieldDialog->show();
+    m_shieldDialog->raise();
+    m_shieldDialog->activateWindow();
 }
 
 void BrowserWindow::showEvent(QShowEvent* event)

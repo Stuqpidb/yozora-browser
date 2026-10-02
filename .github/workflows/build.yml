@@ -1,5 +1,5 @@
 # ---------------------------------------------------------------------------
-# Yozora Browser - private CI
+# Yozora Browser - CI
 #
 # This workflow never publishes anything. It builds and tests, and stores the
 # installer as a workflow artifact for the maintainer to download. Creating a
@@ -13,6 +13,12 @@ on:
   pull_request:
     branches: [main]
   workflow_dispatch:
+
+# The build only ever needs to read the repository. Nothing here writes, issues
+# or comments, and pinning it explicitly means a pull request from a fork cannot
+# do anything with this token even if the default were to change.
+permissions:
+  contents: read
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
