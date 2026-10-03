@@ -44,6 +44,7 @@
 #include <QListWidget>
 #include <QMenu>
 #include <QMessageBox>
+#include <QMouseEvent>
 #include <QPointer>
 #include <QResizeEvent>
 #include <QSaveFile>
@@ -80,8 +81,10 @@ BrowserWindow::BrowserWindow(WebProfile* profile, Settings* settings, BookmarkSt
     , m_private(privateMode)
 {
     // Chrome-style frame: no native title bar. The tab strip row carries the
-    // window controls, and WM_NCHITTEST (below) restores resizing and snapping.
+    // window controls, and WM_NCHITTEST (below) restores dragging and snapping;
+    // window edges are resized through the event filter.
     setWindowFlag(Qt::FramelessWindowHint, true);
+    qApp->installEventFilter(this);
 
     buildUi();
     buildShortcuts();
@@ -176,11 +179,13 @@ void BrowserWindow::buildUi()
 
     connect(m_minButton, &QToolButton::clicked, this, &QWidget::showMinimized);
     connect(m_maxButton, &QToolButton::clicked, this, [this] {
-        // isFullScreen() too: after a video's full screen the window is in that
-        // state, and the button has to bring it back to a window as well.
-        if (isMaximized() || isFullScreen()) {
+        // Restore (or leave full screen) whenever the window is not an ordinary
+        // window; otherwise maximize.
+        if (isFullScreen() || looksMaximized()) {
+            setWindowState(Qt::WindowNoState);
             showNormal();
         } else {
+            setWindowState(Qt::WindowMaximized);
             showMaximized();
         }
     });
@@ -994,7 +999,13 @@ void BrowserWindow::showDownloadsManager()
 
 void BrowserWindow::setBrowserFullScreen(bool fullScreen)
 {
-    if (m_browserFullScreen == fullScreen) {
+    // No early return: the window can be in the full-screen state while this
+    // flag is false (for example after leaving a video by another route), and an
+    // early return would leave it stuck full screen.
+    if (fullScreen && m_browserFullScreen) {
+        return;
+    }
+    if (!fullScreen && !m_browserFullScreen && !isFullScreen()) {
         return;
     }
     m_browserFullScreen = fullScreen;
@@ -1025,11 +1036,11 @@ void BrowserWindow::setBrowserFullScreen(bool fullScreen)
         if (m_downloads && m_downloads->statusBar()) {
             m_downloads->statusBar()->setVisible(m_downloads->activeDownloadCount() > 0);
         }
-        // showMaximized()/showNormal() rather than setWindowState(): going back
-        // through setWindowState made Windows animate a minimize/restore flash
-        // on the way out.
+        // Clear the full-screen state outright, then restore a window (maximized
+        // if that is how it was before).
+        setWindowState(Qt::WindowNoState);
         if (m_wasMaximizedBeforeFullScreen) {
-            showMaximized();
+            setWindowState(Qt::WindowMaximized);
         } else {
             showNormal();
         }
@@ -1260,6 +1271,9 @@ void BrowserWindow::resizeEvent(QResizeEvent* event)
 {
     QMainWindow::resizeEvent(event);
     layoutOverlays();
+    // A native caption double-click can maximize without a state-change event,
+    // so the button glyph is refreshed here as well.
+    updateWindowControlIcons();
 }
 
 void BrowserWindow::layoutOverlays()
@@ -1310,12 +1324,76 @@ void BrowserWindow::showEvent(QShowEvent* event)
 void BrowserWindow::changeEvent(QEvent* event)
 {
     QMainWindow::changeEvent(event);
-    if (event->type() == QEvent::WindowStateChange && m_maxButton) {
-        const bool max = isMaximized();
-        m_maxButton->setIcon(icons::icon(max ? icons::Shape::Restore : icons::Shape::Maximize, 18,
-                                         QColor(Theme::colors().text)));
-        m_maxButton->setToolTip(max ? tr("Restore") : tr("Maximize"));
+    if (event->type() == QEvent::WindowStateChange) {
+        updateWindowControlIcons();
     }
+}
+
+bool BrowserWindow::looksMaximized() const
+{
+    if (isMaximized() || isFullScreen() || (windowState() & Qt::WindowMaximized)) {
+        return true;
+    }
+    // A frameless window maximized by a native caption double-click does not
+    // always show up in isMaximized(); its geometry reaching the screen's work
+    // area is the reliable signal.
+    const QScreen* s = screen();
+    if (s && !isMinimized()) {
+        const QRect work = s->availableGeometry();
+        const QRect g = frameGeometry();
+        if (qAbs(g.width() - work.width()) <= 2 && qAbs(g.height() - work.height()) <= 2
+            && qAbs(g.top() - work.top()) <= 2 && qAbs(g.left() - work.left()) <= 2) {
+            return true;
+        }
+    }
+    return false;
+}
+
+void BrowserWindow::updateWindowControlIcons()
+{
+    if (!m_maxButton) {
+        return;
+    }
+    const bool max = looksMaximized();
+    m_maxButton->setIcon(icons::icon(max ? icons::Shape::Restore : icons::Shape::Maximize, 18,
+                                     QColor(Theme::colors().text), 1.35));
+    m_maxButton->setToolTip(max ? tr("Restore") : tr("Maximize"));
+}
+
+bool BrowserWindow::eventFilter(QObject* watched, QEvent* event)
+{
+    // Resize the frameless window from its edges and corners. Qt handles the OS
+    // side through startSystemResize(), which is what makes the edges behave
+    // like a normal window (and is why it works even without a system frame).
+    if (event->type() == QEvent::MouseButtonPress && !isMaximized() && !isFullScreen()) {
+        auto* widget = qobject_cast<QWidget*>(watched);
+        if (widget && widget->window() == this) {
+            auto* mouse = static_cast<QMouseEvent*>(event);
+            if (mouse->button() == Qt::LeftButton) {
+                constexpr int kGrab = 6;
+                const QPoint gp = mouse->globalPosition().toPoint();
+                const QRect g = frameGeometry();
+                Qt::Edges edges;
+                if (gp.x() <= g.left() + kGrab) {
+                    edges |= Qt::LeftEdge;
+                }
+                if (gp.x() >= g.right() - kGrab) {
+                    edges |= Qt::RightEdge;
+                }
+                if (gp.y() <= g.top() + kGrab) {
+                    edges |= Qt::TopEdge;
+                }
+                if (gp.y() >= g.bottom() - kGrab) {
+                    edges |= Qt::BottomEdge;
+                }
+                if (edges && windowHandle()) {
+                    windowHandle()->startSystemResize(edges);
+                    return true;
+                }
+            }
+        }
+    }
+    return QMainWindow::eventFilter(watched, event);
 }
 
 #if defined(Q_OS_WIN)
@@ -1333,30 +1411,12 @@ bool BrowserWindow::nativeEvent(const QByteArray& eventType, void* message, qint
             const QPoint global(qRound(GET_X_LPARAM(msg->lParam) / dpr),
                                 qRound(GET_Y_LPARAM(msg->lParam) / dpr));
             const QPoint local = mapFromGlobal(global);
-            const QRect r = rect();
-
-            // Eight pixels of grab area on each edge, but only when the window is
-            // not maximized (there is nothing to resize then).
-            constexpr int kBorder = 8;
-            if (!isMaximized()) {
-                const bool left = local.x() < kBorder;
-                const bool right = local.x() >= r.width() - kBorder;
-                const bool top = local.y() < kBorder;
-                const bool bottom = local.y() >= r.height() - kBorder;
-                if (top && left) { *result = HTTOPLEFT; return true; }
-                if (top && right) { *result = HTTOPRIGHT; return true; }
-                if (bottom && left) { *result = HTBOTTOMLEFT; return true; }
-                if (bottom && right) { *result = HTBOTTOMRIGHT; return true; }
-                if (left) { *result = HTLEFT; return true; }
-                if (right) { *result = HTRIGHT; return true; }
-                if (top) { *result = HTTOP; return true; }
-                if (bottom) { *result = HTBOTTOM; return true; }
-            }
 
             // The empty parts of the tab strip drag the window; returning
             // HTCAPTION also gives Windows' snap and double-click-to-maximize.
             // Tabs, the "+" and the window controls are not drag regions, so
-            // they keep receiving clicks.
+            // they keep receiving clicks. Window edges are resized in
+            // eventFilter() through startSystemResize().
             if (m_tabStrip && m_tabStrip->isVisible()) {
                 const QPoint stripLocal = m_tabStrip->mapFrom(this, local);
                 if (m_tabStrip->rect().contains(stripLocal)

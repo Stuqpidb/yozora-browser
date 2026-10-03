@@ -89,9 +89,10 @@ protected:
     void showEvent(QShowEvent* event) override;
     void resizeEvent(QResizeEvent* event) override;
     void changeEvent(QEvent* event) override;
+    bool eventFilter(QObject* watched, QEvent* event) override;
 #if defined(Q_OS_WIN)
-    // Handles WM_NCHITTEST so a frameless window can still be resized and
-    // dragged by its tab strip, and gains Windows' own snap behaviour.
+    // Handles WM_NCHITTEST so a frameless window can still be dragged by its
+    // tab strip, and gains Windows' own snap behaviour.
     bool nativeEvent(const QByteArray& eventType, void* message, qintptr* result) override;
 #endif
 
@@ -126,6 +127,11 @@ private:
     void layoutOverlays();
     // Refreshes the sidebar toggle's chevron and tooltip for the current state.
     void updateSideBarToggle();
+    // True when the window is maximized, including when Windows maximized a
+    // frameless window by a caption double-click, where isMaximized() alone can
+    // miss it.
+    [[nodiscard]] bool looksMaximized() const;
+    void updateWindowControlIcons();
     // Applies the "sidebar enabled" setting: turns the rail and its handle off
     // entirely when the user disabled it.
     void applySideBarEnabled();
