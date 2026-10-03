@@ -5,7 +5,9 @@
 
 #include "core/Animation.h"
 
+#include <QGraphicsOpacityEffect>
 #include <QPropertyAnimation>
+#include <QVariantAnimation>
 #include <QVBoxLayout>
 
 namespace yozora {
@@ -75,6 +77,15 @@ SideBar::SideBar(QWidget* parent)
             setMaximumWidth(kCollapsedWidth);
         }
     });
+
+    m_opacity = new QGraphicsOpacityEffect(this);
+    m_opacity->setOpacity(1.0);
+    setGraphicsEffect(m_opacity);
+    m_opacityAnimation = new QVariantAnimation(this);
+    Animation::configure(m_opacityAnimation, Animation::kStandardMs);
+    connect(m_opacityAnimation, &QVariantAnimation::valueChanged, this, [this](const QVariant& v) {
+        m_opacity->setOpacity(v.toReal());
+    });
 }
 
 RailButton* SideBar::makeButton(RailButton* button, const QString& tooltip)
@@ -111,12 +122,15 @@ void SideBar::setCollapsed(bool collapsed, bool animate)
     m_collapseButton->setToolTip(collapsed ? tr("Show the sidebar") : tr("Hide the sidebar"));
 
     const int target = collapsed ? kCollapsedWidth : kRailWidth;
+    const qreal targetOpacity = collapsed ? 0.0 : 1.0;
 
     if (!animate || !isVisible()) {
         // Without an animation (or before the window is shown) the state is set
         // outright, otherwise a rail that is already hidden would animate from
         // whatever width it happened to have.
         m_widthAnimation->stop();
+        m_opacityAnimation->stop();
+        m_opacity->setOpacity(targetOpacity);
         setVisible(!collapsed);
         setMinimumWidth(target);
         setMaximumWidth(target);
@@ -126,6 +140,7 @@ void SideBar::setCollapsed(bool collapsed, bool animate)
 
     setVisible(true);
     Animation::start(m_widthAnimation, width(), target);
+    Animation::start(m_opacityAnimation, m_opacity->opacity(), targetOpacity);
     emit collapsedChanged(m_collapsed);
 }
 

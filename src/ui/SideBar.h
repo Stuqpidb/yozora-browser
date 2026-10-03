@@ -4,6 +4,8 @@
 #include <QWidget>
 
 class QPropertyAnimation;
+class QVariantAnimation;
+class QGraphicsOpacityEffect;
 class QVBoxLayout;
 
 namespace yozora {
@@ -53,6 +55,10 @@ private:
     RailButton* m_homeButton = nullptr;
     RailButton* m_collapseButton = nullptr;
     QPropertyAnimation* m_widthAnimation = nullptr;
+    // Fades the rail in and out in step with its width, so collapsing reads as
+    // one motion instead of "the icons vanish, then the panel shrinks".
+    QGraphicsOpacityEffect* m_opacity = nullptr;
+    QVariantAnimation* m_opacityAnimation = nullptr;
     bool m_collapsed = false;
 };
 

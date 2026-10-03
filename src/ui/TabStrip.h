@@ -1,11 +1,15 @@
 // SPDX-License-Identifier: MIT
 #pragma once
 
+#include <QHash>
 #include <QIcon>
 #include <QList>
 #include <QRect>
+#include <QSet>
 #include <QString>
 #include <QWidget>
+
+class QTimer;
 
 namespace yozora {
 
@@ -21,6 +25,9 @@ public:
         QIcon icon;
         QString tooltip;
         bool pinned = false;
+        // Stable identity for the tab, so animations can tell an added tab from
+        // a reordered one (indices change; the id does not).
+        quintptr id = 0;
     };
 
     explicit TabStrip(QWidget* parent = nullptr);
@@ -81,11 +88,21 @@ private:
     [[nodiscard]] int tabWidth() const;
     [[nodiscard]] int pinnedTabWidth() const;
     void startHoverAnimation();
+    // Tabs animate in (a short fade/scale) and the strip eases its tab width
+    // when the tab count changes, so opening or closing a tab glides.
+    void ensureTabAnimation();
+    void stepTabAnimation();
 
     QList<Tab> m_tabs;
     int m_current = -1;
     int m_hover = -1;
     HoverTrack m_hoverAmount;
+    // Per-tab appearance, 0 (just added) .. 1 (settled), keyed by Tab::id.
+    QHash<quintptr, qreal> m_appear;
+    // The tab width actually drawn, eased towards tabWidth() so a tab opening or
+    // closing moves the others smoothly instead of snapping.
+    qreal m_tabWidthShown = 0.0;
+    QTimer* m_tabAnimTimer = nullptr;
     // True while the highlight is still moving, so the strip repaints itself.
     bool m_hoverAnimating = false;
     bool m_closeHover = false;

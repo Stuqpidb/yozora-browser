@@ -114,12 +114,79 @@ void TabStrip::startHoverAnimation()
 
 void TabStrip::setTabs(const QList<Tab>& tabs)
 {
+    // Detect added and removed tabs by their stable id so an added tab can fade
+    // in and a removed one drops out of the appearance map.
+    QSet<quintptr> ids;
+    for (const Tab& tab : tabs) {
+        if (tab.id) {
+            ids.insert(tab.id);
+        }
+    }
+    for (auto it = m_appear.begin(); it != m_appear.end();) {
+        if (!ids.contains(it.key())) {
+            it = m_appear.erase(it);
+        } else {
+            ++it;
+        }
+    }
+    bool added = false;
+    for (const Tab& tab : tabs) {
+        if (tab.id && !m_appear.contains(tab.id)) {
+            m_appear.insert(tab.id, 0.0);
+            added = true;
+        }
+    }
+
     m_tabs = tabs;
     m_hoverAmount.resize(tabs.size());
     if (m_hover >= tabs.size()) {
         m_hover = -1;
     }
+    if (m_tabWidthShown <= 0.0) {
+        m_tabWidthShown = tabWidth();
+    }
+    if (added || qAbs(m_tabWidthShown - tabWidth()) > 0.5) {
+        ensureTabAnimation();
+    }
     update();
+}
+
+void TabStrip::ensureTabAnimation()
+{
+    if (m_tabAnimTimer) {
+        if (!m_tabAnimTimer->isActive()) {
+            m_tabAnimTimer->start();
+        }
+        return;
+    }
+    m_tabAnimTimer = new QTimer(this);
+    m_tabAnimTimer->setInterval(15);
+    connect(m_tabAnimTimer, &QTimer::timeout, this, &TabStrip::stepTabAnimation);
+    m_tabAnimTimer->start();
+}
+
+void TabStrip::stepTabAnimation()
+{
+    bool atRest = true;
+    for (auto it = m_appear.begin(); it != m_appear.end(); ++it) {
+        it.value() += (1.0 - it.value()) * 0.34;
+        if (1.0 - it.value() > 0.01) {
+            atRest = false;
+        } else {
+            it.value() = 1.0;
+        }
+    }
+    const qreal target = tabWidth();
+    m_tabWidthShown += (target - m_tabWidthShown) * 0.34;
+    if (qAbs(target - m_tabWidthShown) > 0.5) {
+        atRest = false;
+    } else {
+        m_tabWidthShown = target;
+    }
+    update();
+    if (atRest && m_tabAnimTimer) {
+        m_tabAnimTimer->stop();
+    }
 }
 
 void TabStrip::setPinned(int index, bool pinned)
@@ -181,7 +248,9 @@ int TabStrip::tabWidth() const
 QRect TabStrip::tabRect(int index) const
 {
     const int pinnedWidth = pinnedTabWidth();
-    const int unpinnedWidth = tabWidth();
+    // Use the eased width, so a tab opening or closing slides the rest rather
+    // than snapping them to a new size.
+    const int unpinnedWidth = qRound(m_tabWidthShown > 0.0 ? m_tabWidthShown : tabWidth());
     int x = kBrandWidth;
     for (int i = 0; i < m_tabs.size(); ++i) {
         const bool pinned = m_tabs.at(i).pinned;
@@ -287,6 +356,18 @@ void TabStrip::paintEvent(QPaintEvent*)
         // them.
         const qreal hover = qBound(0.0, m_hoverAmount.value(i), 1.0);
 
+        // A newly added tab fades and scales in around its own centre; both the
+        // opacity and the horizontal scale come from its appearance value.
+        const qreal appear = qBound(0.0, m_appear.value(m_tabs.at(i).id, 1.0), 1.0);
+        painter.save();
+        if (appear < 0.999) {
+            painter.setOpacity(appear);
+            const qreal sx = 0.72 + 0.28 * appear;
+            painter.translate(tab.center().x(), 0.0);
+            painter.scale(sx, 1.0);
+            painter.translate(-tab.center().x(), 0.0);
+        }
+
         // The active tab is a real glass surface: shadow, translucent body, top
         // highlight, hairline. Inactive tabs stay nearly invisible until the
         // pointer is over them, which keeps the strip calm.
@@ -346,20 +427,26 @@ void TabStrip::paintEvent(QPaintEvent*)
         // Close button. Pinned tabs have none: the icon is the whole tab.
         if (!pinned && (selected || hover > 0.01)) {
             const QRect close = closeRect(i);
-            if (hover > 0.5 && m_closeHover) {
+            const bool lit = hover > 0.5 && m_closeHover;
+            if (lit) {
                 painter.setPen(Qt::NoPen);
                 painter.setBrush(QColor(c.danger));
                 painter.drawRoundedRect(close, 6, 6);
-                painter.setPen(QColor(c.accentText));
-            } else {
-                painter.setPen(QColor(c.textMuted));
             }
-            QFont closeFont = font();
-            closeFont.setPointSizeF(9.0);
-            painter.setFont(closeFont);
-            icons::draw(painter, icons::Shape::Close, QRectF(close).adjusted(3, 3, -3, -3),
-                        QColor(c.textMuted), 1.6);
+            // The X is drawn directly, centred on the button. Routing it through
+            // the shared 24-grid icon shrank the stroke to well under a pixel and
+            // it read as a thin, lopsided cross; two centred lines are exact.
+            const QPointF center = QRectF(close).center();
+            constexpr qreal kHalf = 4.0;
+            QPen pen(lit ? QColor(c.accentText) : QColor(c.textMuted), 1.7);
+            pen.setCapStyle(Qt::RoundCap);
+            painter.setPen(pen);
+            painter.drawLine(QPointF(center.x() - kHalf, center.y() - kHalf),
+                             QPointF(center.x() + kHalf, center.y() + kHalf));
+            painter.drawLine(QPointF(center.x() + kHalf, center.y() - kHalf),
+                             QPointF(center.x() - kHalf, center.y() + kHalf));
         }
+        painter.restore();
     }
 
     // Fallback drop indicator while dragging.

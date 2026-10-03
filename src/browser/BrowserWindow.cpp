@@ -123,43 +123,14 @@ void BrowserWindow::buildUi()
     setObjectName(QStringLiteral("browserWindow"));
 
     auto* central = new QWidget(this);
-    auto* root = new QHBoxLayout(central);
+    auto* root = new QVBoxLayout(central);
     root->setContentsMargins(0, 0, 0, 0);
     root->setSpacing(0);
 
-    m_sideBar = new SideBar(central);
-
-    // The reveal handle sits at the very left, before the rail, and is only
-    // visible while the rail is hidden.
-    m_railReveal = new QToolButton(central);
-    m_railReveal->setObjectName(QStringLiteral("railReveal"));
-    m_railReveal->setCursor(Qt::PointingHandCursor);
-    m_railReveal->setToolTip(tr("Show the sidebar (Ctrl+B)"));
-    m_railReveal->setIcon(icons::icon(icons::Shape::ArrowRight, 16,
-                                      QColor(Theme::colors().textMuted)));
-    m_railReveal->setIconSize(QSize(14, 14));
-    m_railReveal->setFixedWidth(16);
-    m_railReveal->setVisible(false);
-    connect(m_railReveal, &QToolButton::clicked, this, [this] { m_sideBar->setCollapsed(false); });
-    root->addWidget(m_railReveal);
-    root->addWidget(m_sideBar);
-
-    auto* right = new QWidget(central);
-    auto* column = new QVBoxLayout(right);
-    column->setContentsMargins(0, 0, 0, 0);
-    column->setSpacing(0);
-
-    m_tabStrip = new TabStrip(right);
-    m_navBar = new NavigationBar(right);
-    m_navBar->setObjectName(QStringLiteral("navigationBar"));
-
-    m_pages = new QStackedWidget(right);
-    m_downloads = new DownloadManager(m_profile->profile(), m_settings, right);
-
-    // Top row: the tab strip and, at its right, the window controls, the way
-    // Chrome puts them. The whole row is the frame's title area; the empty parts
-    // of the strip act as the drag handle (see nativeEvent).
-    m_topBar = new QWidget(right);
+    // The tab strip and window controls span the full width at the top. The
+    // sidebar starts below this row, so it never runs the whole height of the
+    // window (it used to sit beside the tab strip and reach the very top).
+    m_topBar = new QWidget(central);
     m_topBar->setObjectName(QStringLiteral("topBar"));
     // A plain QWidget needs this to paint its style-sheet background, which is
     // the glass gradient the tab strip sits on.
@@ -167,6 +138,8 @@ void BrowserWindow::buildUi()
     auto* topLayout = new QHBoxLayout(m_topBar);
     topLayout->setContentsMargins(0, 0, 0, 0);
     topLayout->setSpacing(0);
+
+    m_tabStrip = new TabStrip(m_topBar);
     topLayout->addWidget(m_tabStrip, 1);
 
     auto* controls = new QWidget(m_topBar);
@@ -195,11 +168,48 @@ void BrowserWindow::buildUi()
     });
     connect(m_closeButton, &QToolButton::clicked, this, &QWidget::close);
 
-    column->addWidget(m_topBar);
+    root->addWidget(m_topBar);
+
+    // Everything below the top bar: the rail, then the page column.
+    auto* middle = new QWidget(central);
+    auto* midLayout = new QHBoxLayout(middle);
+    midLayout->setContentsMargins(0, 0, 0, 0);
+    midLayout->setSpacing(0);
+
+    m_sideBar = new SideBar(middle);
+
+    // The reveal handle sits at the very left, before the rail, and is only
+    // visible while the rail is hidden.
+    m_railReveal = new QToolButton(middle);
+    m_railReveal->setObjectName(QStringLiteral("railReveal"));
+    m_railReveal->setCursor(Qt::PointingHandCursor);
+    m_railReveal->setToolTip(tr("Show the sidebar (Ctrl+B)"));
+    m_railReveal->setIcon(icons::icon(icons::Shape::ArrowRight, 16,
+                                      QColor(Theme::colors().textMuted)));
+    m_railReveal->setIconSize(QSize(14, 14));
+    m_railReveal->setFixedWidth(16);
+    m_railReveal->setVisible(false);
+    connect(m_railReveal, &QToolButton::clicked, this, [this] { m_sideBar->setCollapsed(false); });
+    midLayout->addWidget(m_railReveal);
+    midLayout->addWidget(m_sideBar);
+
+    auto* right = new QWidget(middle);
+    auto* column = new QVBoxLayout(right);
+    column->setContentsMargins(0, 0, 0, 0);
+    column->setSpacing(0);
+
+    m_navBar = new NavigationBar(right);
+    m_navBar->setObjectName(QStringLiteral("navigationBar"));
+
+    m_pages = new QStackedWidget(right);
+    m_downloads = new DownloadManager(m_profile->profile(), m_settings, right);
+
     column->addWidget(m_navBar);
     column->addWidget(m_pages, 1);
     column->addWidget(m_downloads->statusBar());
-    root->addWidget(right, 1);
+    midLayout->addWidget(right, 1);
+
+    root->addWidget(middle, 1);
 
     setCentralWidget(central);
     statusBar()->hide();
@@ -743,6 +753,7 @@ void BrowserWindow::refreshTabStrip()
         entry.icon = tab->icon();
         entry.tooltip = tab->url().toString();
         entry.pinned = m_pinnedTabs.contains(tab);
+        entry.id = reinterpret_cast<quintptr>(tab);
         stripTabs.append(entry);
     }
     m_tabStrip->setTabs(stripTabs);
