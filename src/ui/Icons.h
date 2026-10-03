@@ -50,6 +50,9 @@ enum class Shape {
     Minimize,
     Maximize,
     Restore,
+    // Sidebar toggle chevrons.
+    ChevronLeft,
+    ChevronRight,
 };
 
 inline void stroke(QPainter& painter, const QPainterPath& path, const QColor& color,
@@ -329,6 +332,22 @@ inline void draw(QPainter& painter, Shape shape, const QRectF& box, const QColor
             QPainterPath front;
             front.addRoundedRect(QRectF(6.5, 8.5, 9, 9), 2, 2);
             stroke(painter, front, color, 1.6);
+            break;
+        }
+        case Shape::ChevronLeft: {
+            QPainterPath path;
+            path.moveTo(14.5, 6.5);
+            path.lineTo(9, 12);
+            path.lineTo(14.5, 17.5);
+            stroke(painter, path, color, width);
+            break;
+        }
+        case Shape::ChevronRight: {
+            QPainterPath path;
+            path.moveTo(9.5, 6.5);
+            path.lineTo(15, 12);
+            path.lineTo(9.5, 17.5);
+            stroke(painter, path, color, width);
             break;
         }
     }

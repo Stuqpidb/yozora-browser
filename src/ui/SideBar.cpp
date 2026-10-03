@@ -49,12 +49,6 @@ SideBar::SideBar(QWidget* parent)
 
     m_layout->addStretch(1);
 
-    // The collapse toggle lives in the rail, at the bottom with the settings
-    // button, and points at the edge the rail slides into.
-    m_collapseButton = new RailButton(RailIcon::Collapse, tr("Hide the sidebar"), this);
-    makeButton(m_collapseButton, tr("Hide the sidebar"));
-    connect(m_collapseButton, &RailButton::clicked, this, &SideBar::onCollapseToggled);
-
     auto* settings = new RailButton(RailIcon::Settings, tr("Settings (Ctrl+,)"), this);
     makeButton(settings, tr("Settings (Ctrl+,)"));
     connect(settings, &RailButton::clicked, this, &SideBar::settingsRequested);
@@ -105,18 +99,12 @@ void SideBar::setAvailableHeight(int height)
     }
 }
 
-void SideBar::onCollapseToggled()
-{
-    setCollapsed(!m_collapsed);
-}
-
 void SideBar::setCollapsed(bool collapsed, bool animate)
 {
     if (m_collapsed == collapsed) {
         return;
     }
     m_collapsed = collapsed;
-    m_collapseButton->setToolTip(collapsed ? tr("Show the sidebar") : tr("Hide the sidebar"));
 
     const int targetX = collapsed ? -kRailWidth : 0;
     const qreal targetOpacity = collapsed ? 0.0 : 1.0;

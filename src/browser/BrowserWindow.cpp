@@ -141,6 +141,21 @@ void BrowserWindow::buildUi()
     topLayout->setSpacing(0);
 
     m_tabStrip = new TabStrip(m_topBar);
+
+    // One toggle for the sidebar, always in the same place: at the far left of
+    // the top bar. It flips between "hide" and "show" instead of the two
+    // separate buttons there used to be.
+    m_sideBarToggle = new QToolButton(m_topBar);
+    m_sideBarToggle->setObjectName(QStringLiteral("sideBarToggle"));
+    m_sideBarToggle->setCursor(Qt::PointingHandCursor);
+    m_sideBarToggle->setIconSize(QSize(16, 16));
+    m_sideBarToggle->setFixedSize(36, 30);
+    connect(m_sideBarToggle, &QToolButton::clicked, this, [this] {
+        if (m_sideBarEnabled) {
+            m_sideBar->setCollapsed(!m_sideBar->isCollapsed());
+        }
+    });
+    topLayout->addWidget(m_sideBarToggle);
     topLayout->addWidget(m_tabStrip, 1);
 
     auto* controls = new QWidget(m_topBar);
@@ -192,20 +207,6 @@ void BrowserWindow::buildUi()
     m_sideBar = new SideBar(m_contentArea);
     m_sideBar->raise();
 
-    // The reveal handle: a small glass tab at the left edge, shown only while
-    // the rail is hidden so it can always be brought back.
-    m_railReveal = new QToolButton(m_contentArea);
-    m_railReveal->setObjectName(QStringLiteral("railReveal"));
-    m_railReveal->setCursor(Qt::PointingHandCursor);
-    m_railReveal->setToolTip(tr("Show the sidebar (Ctrl+B)"));
-    m_railReveal->setIcon(icons::icon(icons::Shape::ArrowRight, 18, QColor(Theme::colors().text),
-                                      1.3));
-    m_railReveal->setIconSize(QSize(16, 16));
-    m_railReveal->setFixedSize(20, 56);
-    m_railReveal->setVisible(false);
-    m_railReveal->raise();
-    connect(m_railReveal, &QToolButton::clicked, this, [this] { m_sideBar->setCollapsed(false); });
-
     setCentralWidget(central);
     statusBar()->hide();
 
@@ -225,8 +226,7 @@ void BrowserWindow::buildUi()
     // visible, for the rest of the session and the next start.
     connect(m_sideBar, &SideBar::collapsedChanged, this, [this](bool collapsed) {
         m_settings->setSideBarCollapsed(collapsed);
-        // The handle only exists so a hidden rail can come back.
-        m_railReveal->setVisible(collapsed && m_sideBarEnabled);
+        updateSideBarToggle();
         update();
     });
     m_sideBarEnabled = m_settings->sideBarEnabled();
@@ -1006,8 +1006,8 @@ void BrowserWindow::setBrowserFullScreen(bool fullScreen)
         if (m_sideBar) {
             m_sideBar->setVisible(false);
         }
-        if (m_railReveal) {
-            m_railReveal->setVisible(false);
+        if (m_sideBarToggle) {
+            m_sideBarToggle->setVisible(false);
         }
         if (m_downloads && m_downloads->statusBar()) {
             m_downloads->statusBar()->setVisible(false);
@@ -1260,26 +1260,38 @@ void BrowserWindow::resizeEvent(QResizeEvent* event)
 
 void BrowserWindow::layoutOverlays()
 {
-    if (!m_contentArea || !m_sideBar || !m_railReveal) {
+    if (!m_contentArea || !m_sideBar) {
         return;
     }
-    const int height = m_contentArea->height();
-    m_sideBar->setAvailableHeight(height);
-    // The handle sits at the left edge, vertically centred.
-    m_railReveal->move(0, (height - m_railReveal->height()) / 2);
+    // The rail floats over the page area; the parent only supplies the height.
+    m_sideBar->setAvailableHeight(m_contentArea->height());
+}
+
+void BrowserWindow::updateSideBarToggle()
+{
+    if (!m_sideBarToggle) {
+        return;
+    }
+    const bool collapsed = m_sideBar->isCollapsed();
+    m_sideBarToggle->setIcon(icons::icon(collapsed ? icons::Shape::ChevronRight
+                                                   : icons::Shape::ChevronLeft,
+                                         18, QColor(Theme::colors().textMuted), 1.3));
+    m_sideBarToggle->setToolTip(collapsed ? tr("Show the sidebar (Ctrl+B)")
+                                          : tr("Hide the sidebar (Ctrl+B)"));
 }
 
 void BrowserWindow::applySideBarEnabled()
 {
     m_sideBarEnabled = m_settings->sideBarEnabled();
-    if (!m_sideBarEnabled) {
-        m_sideBar->setVisible(false);
-        m_railReveal->setVisible(false);
-        return;
+    m_sideBar->setVisible(m_sideBarEnabled);
+    m_sideBarToggle->setVisible(m_sideBarEnabled);
+    if (m_sideBarEnabled) {
+        // Snap the rail to its resting place for the current state, then refresh
+        // the toggle glyph.
+        m_sideBar->setCollapsed(m_sideBar->isCollapsed(), false);
+        layoutOverlays();
+        updateSideBarToggle();
     }
-    m_sideBar->setVisible(true);
-    m_railReveal->setVisible(m_sideBar->isCollapsed());
-    layoutOverlays();
 }
 
 void BrowserWindow::showEvent(QShowEvent* event)

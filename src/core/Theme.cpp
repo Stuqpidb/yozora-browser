@@ -185,18 +185,14 @@ QToolButton#railButton {
 QToolButton#railButton:hover { background: %SURFACE_HOVER%; color: %TEXT%; }
 QToolButton#railButton:checked { background: %SURFACE_ACTIVE%; color: %TEXT%; }
 
-/* The small handle that brings a hidden rail back. It is a rounded tab at the
-   left edge, visible only while the rail is collapsed. */
-QToolButton#railReveal {
-    background: qlineargradient(x1:0, y1:0, x2:1, y2:0,
-        stop:0 %GLASS_RAIL%, stop:1 %GLASS_RAIL_EDGE%);
-    border: 1px solid %BORDER%;
-    border-top-right-radius: 14px;
-    border-bottom-right-radius: 14px;
-    border-top-left-radius: 0;
-    border-bottom-left-radius: 0;
+/* The sidebar toggle in the top bar: one button in one place that shows or
+   hides the rail. */
+QToolButton#sideBarToggle {
+    background: transparent;
+    border: none;
+    border-radius: 8px;
 }
-QToolButton#railReveal:hover { background: %SURFACE_HOVER%; }
+QToolButton#sideBarToggle:hover { background: %SURFACE_HOVER%; }
 
 /* ---- Top chrome ------------------------------------------------------ */
 /* The same sheen as the rail: lighter where the light falls, so the bar looks

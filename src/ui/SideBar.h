@@ -52,12 +52,10 @@ signals:
 
 private:
     RailButton* makeButton(RailButton* button, const QString& tooltip);
-    void onCollapseToggled();
 
     QVBoxLayout* m_layout = nullptr;
     QList<RailButton*> m_buttons;
     RailButton* m_homeButton = nullptr;
-    RailButton* m_collapseButton = nullptr;
     // The rail slides out to the left as an overlay; animating the position
     // (not the width) is what keeps the page from reflowing underneath it.
     QPropertyAnimation* m_slideAnimation = nullptr;

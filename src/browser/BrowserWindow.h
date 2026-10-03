@@ -124,6 +124,8 @@ private:
     void showTabContextMenu(int index, const QPoint& globalPos);
     // Positions the overlay rail and the reveal handle over the page area.
     void layoutOverlays();
+    // Refreshes the sidebar toggle's chevron and tooltip for the current state.
+    void updateSideBarToggle();
     // Applies the "sidebar enabled" setting: turns the rail and its handle off
     // entirely when the user disabled it.
     void applySideBarEnabled();
@@ -159,7 +161,7 @@ private:
     SideBar* m_sideBar = nullptr;
     // A slim handle at the very left edge, shown only while the rail is hidden,
     // so a collapsed sidebar can always be brought back without knowing Ctrl+B.
-    QToolButton* m_railReveal = nullptr;
+    QToolButton* m_sideBarToggle = nullptr;
     QWidget* m_topBar = nullptr;
     QWidget* m_contentArea = nullptr;
     QToolButton* m_minButton = nullptr;
