@@ -176,7 +176,9 @@ void BrowserWindow::buildUi()
 
     connect(m_minButton, &QToolButton::clicked, this, &QWidget::showMinimized);
     connect(m_maxButton, &QToolButton::clicked, this, [this] {
-        if (isMaximized()) {
+        // isFullScreen() too: after a video's full screen the window is in that
+        // state, and the button has to bring it back to a window as well.
+        if (isMaximized() || isFullScreen()) {
             showNormal();
         } else {
             showMaximized();
@@ -398,7 +400,7 @@ void BrowserWindow::buildShortcuts()
     add(sequence("Esc"), [this] {
         // Leaving a video's full screen is the first thing Esc should do; the
         // page is told too, so its own full-screen state does not get stuck.
-        if (m_browserFullScreen) {
+        if (m_browserFullScreen || isFullScreen()) {
             if (auto* tab = currentTab()) {
                 if (auto* view = tab->view()) {
                     view->page()->runJavaScript(
@@ -440,6 +442,8 @@ void BrowserWindow::buildShortcuts()
 
     add(sequence("Ctrl+Shift+I"), [this] { openDevTools(); });
     add(sequence("F12"), [this] { openDevTools(); });
+    // A plain browser full screen, independent of a page's video full screen.
+    add(sequence("F11"), [this] { setBrowserFullScreen(!m_browserFullScreen); });
     add(sequence("Ctrl+,"), [this] { showSettings(); });
     add(sequence("Ctrl+Q"), [this] { close(); });
 

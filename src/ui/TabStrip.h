@@ -72,12 +72,17 @@ private:
     public:
         void resize(int count);
         void set(int index, qreal target);
+        // Sets every target except `index` back to 0.
+        void clearExcept(int index);
         [[nodiscard]] qreal value(int index) const;
         void advance(qreal step);
         [[nodiscard]] bool atRest() const;
 
     private:
         QList<qreal> m_values;
+        // The values ease towards these, so a hover stays lit while the pointer
+        // rests on a tab instead of fading the moment the mouse stops moving.
+        QList<qreal> m_targets;
     };
 
     [[nodiscard]] QRect tabRect(int index) const;
@@ -94,6 +99,15 @@ private:
     void stepTabAnimation();
 
     QList<Tab> m_tabs;
+    // Tabs that just closed, kept briefly so they can fade out at their old
+    // position instead of vanishing between frames.
+    struct ClosingTab {
+        Tab tab;
+        qreal x = 0.0;
+        qreal width = 0.0;
+        qreal appear = 1.0;
+    };
+    QList<ClosingTab> m_closing;
     int m_current = -1;
     int m_hover = -1;
     HoverTrack m_hoverAmount;

@@ -13,6 +13,8 @@
 #include <QTimer>
 #include <QWheelEvent>
 
+#include <utility>
+
 namespace yozora {
 
 namespace {
@@ -45,14 +47,24 @@ TabStrip::TabStrip(QWidget* parent)
 void TabStrip::HoverTrack::resize(int count)
 {
     m_values.resize(count);
+    m_targets.resize(count);
 }
 
 void TabStrip::HoverTrack::set(int index, qreal target)
 {
-    if (index < 0 || index >= m_values.size()) {
+    if (index < 0 || index >= m_targets.size()) {
         return;
     }
-    m_values[index] = qBound(0.0, target, 1.0);
+    m_targets[index] = qBound(0.0, target, 1.0);
+}
+
+void TabStrip::HoverTrack::clearExcept(int index)
+{
+    for (int i = 0; i < m_targets.size(); ++i) {
+        if (i != index) {
+            m_targets[i] = 0.0;
+        }
+    }
 }
 
 qreal TabStrip::HoverTrack::value(int index) const
@@ -65,21 +77,23 @@ qreal TabStrip::HoverTrack::value(int index) const
 
 void TabStrip::HoverTrack::advance(qreal step)
 {
-    for (qreal& value : m_values) {
-        if (qAbs(value) < step) {
-            value = 0.0;
-        } else if (value > 0.0) {
-            value -= step;
-        } else {
-            value += step;
+    // Ease every value towards its target; a value that has arrived stays put,
+    // which is what keeps a resting hover lit.
+    for (int i = 0; i < m_values.size(); ++i) {
+        const qreal target = i < m_targets.size() ? m_targets.at(i) : 0.0;
+        if (m_values[i] < target) {
+            m_values[i] = qMin(target, m_values[i] + step);
+        } else if (m_values[i] > target) {
+            m_values[i] = qMax(target, m_values[i] - step);
         }
     }
 }
 
 bool TabStrip::HoverTrack::atRest() const
 {
-    for (qreal value : m_values) {
-        if (value != 0.0) {
+    for (int i = 0; i < m_values.size(); ++i) {
+        const qreal target = i < m_targets.size() ? m_targets.at(i) : 0.0;
+        if (m_values.at(i) != target) {
             return false;
         }
     }
@@ -137,6 +151,20 @@ void TabStrip::setTabs(const QList<Tab>& tabs)
         }
     }
 
+    // Snapshot the layout of tabs that are about to disappear, so each can fade
+    // out where it was instead of blinking away.
+    for (int i = 0; i < m_tabs.size(); ++i) {
+        const Tab& old = m_tabs.at(i);
+        if (old.id && !ids.contains(old.id)) {
+            const QRect r = tabRect(i);
+            ClosingTab closing;
+            closing.tab = old;
+            closing.x = r.x();
+            closing.width = r.width();
+            m_closing.append(closing);
+        }
+    }
+
     m_tabs = tabs;
     m_hoverAmount.resize(tabs.size());
     if (m_hover >= tabs.size()) {
@@ -145,7 +173,7 @@ void TabStrip::setTabs(const QList<Tab>& tabs)
     if (m_tabWidthShown <= 0.0) {
         m_tabWidthShown = tabWidth();
     }
-    if (added || qAbs(m_tabWidthShown - tabWidth()) > 0.5) {
+    if (added || !m_closing.isEmpty() || qAbs(m_tabWidthShown - tabWidth()) > 0.5) {
         ensureTabAnimation();
     }
     update();
@@ -182,6 +210,15 @@ void TabStrip::stepTabAnimation()
         atRest = false;
     } else {
         m_tabWidthShown = target;
+    }
+    // Fade the closing tabs out, dropping each once it is effectively invisible.
+    for (int i = m_closing.size() - 1; i >= 0; --i) {
+        m_closing[i].appear -= m_closing[i].appear * 0.42;
+        if (m_closing[i].appear < 0.03) {
+            m_closing.removeAt(i);
+        } else {
+            atRest = false;
+        }
     }
     update();
     if (atRest && m_tabAnimTimer) {
@@ -449,6 +486,34 @@ void TabStrip::paintEvent(QPaintEvent*)
         painter.restore();
     }
 
+    // Closing tabs fade out where they were, so a close reads as the tab
+    // leaving rather than blinking out.
+    for (const ClosingTab& closing : std::as_const(m_closing)) {
+        painter.save();
+        painter.setOpacity(qBound(0.0, closing.appear, 1.0));
+        const QRect tab(static_cast<int>(closing.x), kTabTop, static_cast<int>(closing.width),
+                        kTabHeight);
+        painter.setPen(Qt::NoPen);
+        painter.setBrush(QColor(c.tabInactive));
+        painter.drawRoundedRect(tab, 11, 11);
+        const int iconY = tab.top() + (tab.height() - 16) / 2;
+        const QRect iconRect(tab.left() + 11, iconY, 16, 16);
+        if (!closing.tab.icon.isNull()) {
+            closing.tab.icon.paint(&painter, iconRect, Qt::AlignCenter, QIcon::Normal);
+        }
+        QFont tabFont = font();
+        tabFont.setPointSizeF(12.0);
+        painter.setFont(tabFont);
+        painter.setPen(QColor(c.textMuted));
+        const int textLeft = iconRect.right() + 8;
+        const int textRight = tab.right() - kCloseSize - 12;
+        const QString title = QFontMetrics(tabFont).elidedText(
+            closing.tab.title, Qt::ElideRight, qMax(10, textRight - textLeft));
+        painter.drawText(QRect(textLeft, tab.top(), textRight - textLeft, tab.height()),
+                         Qt::AlignVCenter | Qt::AlignLeft, title);
+        painter.restore();
+    }
+
     // Fallback drop indicator while dragging.
     if (m_dragging && m_dragIndex >= 0) {
         const QRect tab = tabRect(m_dragIndex);
@@ -509,6 +574,7 @@ void TabStrip::mouseMoveEvent(QMouseEvent* event)
     if (index != m_hover) {
         m_hover = index;
         // The tab the pointer left retracts, the one it arrived at fills.
+        m_hoverAmount.clearExcept(m_hover);
         m_hoverAmount.set(m_hover, 1.0);
         startHoverAnimation();
         changed = true;
@@ -560,7 +626,7 @@ void TabStrip::mouseReleaseEvent(QMouseEvent* event)
 void TabStrip::leaveEvent(QEvent*)
 {
     m_hover = -1;
-    m_hoverAmount.set(m_hover, 0.0);
+    m_hoverAmount.clearExcept(-1);
     startHoverAnimation();
     m_closeHover = false;
     m_plusHover = false;
