@@ -46,6 +46,7 @@
 #include <QMessageBox>
 #include <QPointer>
 #include <QSaveFile>
+#include <QScreen>
 #include <QShortcut>
 #include <QShowEvent>
 #include <QStackedWidget>
@@ -54,6 +55,12 @@
 #include <QToolButton>
 #include <QVBoxLayout>
 #include <QWebEngineView>
+#include <QWindow>
+
+#if defined(Q_OS_WIN)
+#  include <windows.h>
+#  include <windowsx.h>
+#endif
 
 namespace yozora {
 
@@ -71,6 +78,10 @@ BrowserWindow::BrowserWindow(WebProfile* profile, Settings* settings, BookmarkSt
     , m_updateChecker(new UpdateChecker(this))
     , m_private(privateMode)
 {
+    // Chrome-style frame: no native title bar. The tab strip row carries the
+    // window controls, and WM_NCHITTEST (below) restores resizing and snapping.
+    setWindowFlag(Qt::FramelessWindowHint, true);
+
     buildUi();
     buildShortcuts();
 
@@ -145,7 +156,46 @@ void BrowserWindow::buildUi()
     m_pages = new QStackedWidget(right);
     m_downloads = new DownloadManager(m_profile->profile(), m_settings, right);
 
-    column->addWidget(m_tabStrip);
+    // Top row: the tab strip and, at its right, the window controls, the way
+    // Chrome puts them. The whole row is the frame's title area; the empty parts
+    // of the strip act as the drag handle (see nativeEvent).
+    m_topBar = new QWidget(right);
+    m_topBar->setObjectName(QStringLiteral("topBar"));
+    // A plain QWidget needs this to paint its style-sheet background, which is
+    // the glass gradient the tab strip sits on.
+    m_topBar->setAttribute(Qt::WA_StyledBackground, true);
+    auto* topLayout = new QHBoxLayout(m_topBar);
+    topLayout->setContentsMargins(0, 0, 0, 0);
+    topLayout->setSpacing(0);
+    topLayout->addWidget(m_tabStrip, 1);
+
+    auto* controls = new QWidget(m_topBar);
+    controls->setObjectName(QStringLiteral("windowControls"));
+    auto* controlsLayout = new QHBoxLayout(controls);
+    controlsLayout->setContentsMargins(4, 0, 6, 0);
+    controlsLayout->setSpacing(2);
+    m_minButton = makeWindowButton(icons::Shape::Minimize, QStringLiteral("windowMinButton"),
+                                   tr("Minimize"));
+    m_maxButton = makeWindowButton(icons::Shape::Maximize, QStringLiteral("windowMaxButton"),
+                                   tr("Maximize"));
+    m_closeButton = makeWindowButton(icons::Shape::Close, QStringLiteral("windowCloseButton"),
+                                     tr("Close"));
+    controlsLayout->addWidget(m_minButton);
+    controlsLayout->addWidget(m_maxButton);
+    controlsLayout->addWidget(m_closeButton);
+    topLayout->addWidget(controls);
+
+    connect(m_minButton, &QToolButton::clicked, this, &QWidget::showMinimized);
+    connect(m_maxButton, &QToolButton::clicked, this, [this] {
+        if (isMaximized()) {
+            showNormal();
+        } else {
+            showMaximized();
+        }
+    });
+    connect(m_closeButton, &QToolButton::clicked, this, &QWidget::close);
+
+    column->addWidget(m_topBar);
     column->addWidget(m_navBar);
     column->addWidget(m_pages, 1);
     column->addWidget(m_downloads->statusBar());
@@ -291,6 +341,20 @@ void BrowserWindow::buildUi()
     };
     armUpdateTimer();
     connect(m_settings, &Settings::backgroundUpdatesChanged, this, armUpdateTimer);
+}
+
+QToolButton* BrowserWindow::makeWindowButton(icons::Shape shape, const QString& objectName,
+                                             const QString& tooltip)
+{
+    auto* button = new QToolButton(m_topBar);
+    button->setObjectName(objectName);
+    button->setToolTip(tooltip);
+    button->setFocusPolicy(Qt::NoFocus);
+    button->setCursor(Qt::ArrowCursor);
+    button->setIcon(icons::icon(shape, 18, QColor(Theme::colors().text)));
+    button->setIconSize(QSize(16, 16));
+    button->setFixedSize(40, 30);
+    return button;
 }
 
 void BrowserWindow::buildShortcuts()
@@ -1175,6 +1239,70 @@ void BrowserWindow::showEvent(QShowEvent* event)
     // constructor.
     Glass::applyWindowBackdrop(this);
 }
+
+void BrowserWindow::changeEvent(QEvent* event)
+{
+    QMainWindow::changeEvent(event);
+    if (event->type() == QEvent::WindowStateChange && m_maxButton) {
+        const bool max = isMaximized();
+        m_maxButton->setIcon(icons::icon(max ? icons::Shape::Restore : icons::Shape::Maximize, 18,
+                                         QColor(Theme::colors().text)));
+        m_maxButton->setToolTip(max ? tr("Restore") : tr("Maximize"));
+    }
+}
+
+#if defined(Q_OS_WIN)
+bool BrowserWindow::nativeEvent(const QByteArray& eventType, void* message, qintptr* result)
+{
+    if (eventType == "windows_generic_MSG" || eventType == "windows_dispatcher_MSG") {
+        MSG* msg = static_cast<MSG*>(message);
+        if (msg->message == WM_NCHITTEST) {
+            // lParam is in physical screen pixels; convert to Qt's logical
+            // coordinates so the test is right on scaled displays too.
+            qreal dpr = 1.0;
+            if (windowHandle() && windowHandle()->screen()) {
+                dpr = windowHandle()->screen()->devicePixelRatio();
+            }
+            const QPoint global(qRound(GET_X_LPARAM(msg->lParam) / dpr),
+                                qRound(GET_Y_LPARAM(msg->lParam) / dpr));
+            const QPoint local = mapFromGlobal(global);
+            const QRect r = rect();
+
+            // Eight pixels of grab area on each edge, but only when the window is
+            // not maximized (there is nothing to resize then).
+            constexpr int kBorder = 8;
+            if (!isMaximized()) {
+                const bool left = local.x() < kBorder;
+                const bool right = local.x() >= r.width() - kBorder;
+                const bool top = local.y() < kBorder;
+                const bool bottom = local.y() >= r.height() - kBorder;
+                if (top && left) { *result = HTTOPLEFT; return true; }
+                if (top && right) { *result = HTTOPRIGHT; return true; }
+                if (bottom && left) { *result = HTBOTTOMLEFT; return true; }
+                if (bottom && right) { *result = HTBOTTOMRIGHT; return true; }
+                if (left) { *result = HTLEFT; return true; }
+                if (right) { *result = HTRIGHT; return true; }
+                if (top) { *result = HTTOP; return true; }
+                if (bottom) { *result = HTBOTTOM; return true; }
+            }
+
+            // The empty parts of the tab strip drag the window; returning
+            // HTCAPTION also gives Windows' snap and double-click-to-maximize.
+            // Tabs, the "+" and the window controls are not drag regions, so
+            // they keep receiving clicks.
+            if (m_tabStrip && m_tabStrip->isVisible()) {
+                const QPoint stripLocal = m_tabStrip->mapFrom(this, local);
+                if (m_tabStrip->rect().contains(stripLocal)
+                    && m_tabStrip->isDragRegion(stripLocal)) {
+                    *result = HTCAPTION;
+                    return true;
+                }
+            }
+        }
+    }
+    return QMainWindow::nativeEvent(eventType, message, result);
+}
+#endif
 
 void BrowserWindow::closeEvent(QCloseEvent* event)
 {

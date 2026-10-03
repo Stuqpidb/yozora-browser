@@ -34,6 +34,10 @@ public:
     // at the left end; the window owns the ordering, the strip only reflects it.
     void setPinned(int index, bool pinned);
 
+    // True when `local` is on the strip's empty background (not a tab, close
+    // button or the "+"). The window uses this to let that area drag the window.
+    [[nodiscard]] bool isDragRegion(const QPoint& local) const;
+
     [[nodiscard]] QSize sizeHint() const override;
     [[nodiscard]] QSize minimumSizeHint() const override;
 

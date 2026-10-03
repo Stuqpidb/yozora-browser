@@ -3,6 +3,7 @@
 
 #include "privacy/FilterEngine.h"
 #include "privacy/RequestInterceptor.h"
+#include "ui/Icons.h"
 
 #include <QList>
 #include <QMainWindow>
@@ -85,6 +86,12 @@ public:
 protected:
     void closeEvent(QCloseEvent* event) override;
     void showEvent(QShowEvent* event) override;
+    void changeEvent(QEvent* event) override;
+#if defined(Q_OS_WIN)
+    // Handles WM_NCHITTEST so a frameless window can still be resized and
+    // dragged by its tab strip, and gains Windows' own snap behaviour.
+    bool nativeEvent(const QByteArray& eventType, void* message, qintptr* result) override;
+#endif
 
 private:
     struct SessionSnapshot {
@@ -96,6 +103,8 @@ private:
     void buildShortcuts();
     void buildMenu(const QPoint& globalPos);
     void connectTab(BrowserTab* tab);
+    QToolButton* makeWindowButton(icons::Shape shape, const QString& objectName,
+                                  const QString& tooltip);
     void selectTab(int index);
     void refreshTabStrip();
     void updateForActiveTab();
@@ -144,6 +153,10 @@ private:
     // A slim handle at the very left edge, shown only while the rail is hidden,
     // so a collapsed sidebar can always be brought back without knowing Ctrl+B.
     QToolButton* m_railReveal = nullptr;
+    QWidget* m_topBar = nullptr;
+    QToolButton* m_minButton = nullptr;
+    QToolButton* m_maxButton = nullptr;
+    QToolButton* m_closeButton = nullptr;
     TabStrip* m_tabStrip = nullptr;
     NavigationBar* m_navBar = nullptr;
     QStackedWidget* m_pages = nullptr;

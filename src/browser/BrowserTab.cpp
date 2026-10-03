@@ -51,7 +51,16 @@ BrowserTab::BrowserTab(QWebEngineProfile* profile, Settings* settings, HistorySt
     if (page) {
         connect(page, &WebPage::titleChanged, this, &BrowserTab::updateTitle);
         connect(page, &WebPage::iconChanged, this, &BrowserTab::updateTitle);
-        connect(page, &WebPage::urlChanged, this, &BrowserTab::updateState);
+        connect(page, &WebPage::urlChanged, this, [this](const QUrl& url) {
+            // Chromium parks a navigation it refused at about:blank#blocked.
+            // Showing that leaves an empty tab; fall back to the start page so
+            // the user is never left staring at a blank tab.
+            if (url.toString().startsWith(QLatin1String("about:blank#blocked"))) {
+                showStartPage();
+                return;
+            }
+            updateState();
+        });
         connect(page, &WebPage::loadingChanged, this, [this](bool loading) {
             emit loadingChanged(loading);
             emit loadProgressChanged(loading ? 0 : 100);

@@ -46,6 +46,10 @@ enum class Shape {
     Database,
     Key,
     Info,
+    // Window controls, drawn on the same 24x24 grid as everything else.
+    Minimize,
+    Maximize,
+    Restore,
 };
 
 inline void stroke(QPainter& painter, const QPainterPath& path, const QColor& color,
@@ -298,6 +302,33 @@ inline void draw(QPainter& painter, Shape shape, const QRectF& box, const QColor
             stem.moveTo(12, 10.8);
             stem.lineTo(12, 16.8);
             stroke(painter, stem, color, width);
+            break;
+        }
+        case Shape::Minimize: {
+            QPainterPath line;
+            line.moveTo(6, 12);
+            line.lineTo(18, 12);
+            stroke(painter, line, color, 1.6);
+            break;
+        }
+        case Shape::Maximize: {
+            QPainterPath square;
+            square.addRoundedRect(QRectF(6.5, 6.5, 11, 11), 2, 2);
+            stroke(painter, square, color, 1.6);
+            break;
+        }
+        case Shape::Restore: {
+            // Two overlapping squares: the "restore down" glyph.
+            QPainterPath back;
+            back.moveTo(8.5, 8.5);
+            back.lineTo(8.5, 6.5);
+            back.lineTo(17.5, 6.5);
+            back.lineTo(17.5, 15.5);
+            back.lineTo(15.5, 15.5);
+            stroke(painter, back, color, 1.6);
+            QPainterPath front;
+            front.addRoundedRect(QRectF(6.5, 8.5, 9, 9), 2, 2);
+            stroke(painter, front, color, 1.6);
             break;
         }
     }

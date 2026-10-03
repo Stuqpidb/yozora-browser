@@ -218,6 +218,11 @@ int TabStrip::tabAt(const QPoint& pos) const
     return -1;
 }
 
+bool TabStrip::isDragRegion(const QPoint& local) const
+{
+    return tabAt(local) < 0 && !plusRect().contains(local);
+}
+
 int TabStrip::dropIndexFor(const QPoint& pos) const
 {
     const int count = static_cast<int>(m_tabs.size());
@@ -242,7 +247,8 @@ void TabStrip::paintEvent(QPaintEvent*)
     const Glass::Recipe glass = Glass::recipe(11);
     QPainter painter(this);
     painter.setRenderHint(QPainter::Antialiasing, true);
-    painter.fillRect(rect(), QColor(c.background));
+    // No background here: the tab strip sits on the window's glass top bar, so
+    // it must stay transparent and let that surface show through.
 
     // Brand: the real Yozora mark and the wordmark in the accent gradient. The
     // mark used to be a Unicode four-point star, which is not the product's logo

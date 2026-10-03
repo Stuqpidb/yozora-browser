@@ -198,6 +198,24 @@ QToolButton#railReveal:hover { background: %SURFACE_HOVER%; }
 /* ---- Top chrome ------------------------------------------------------ */
 /* The same sheen as the rail: lighter where the light falls, so the bar looks
    like a sheet of glass lying on the window. */
+/* The top row: the tab strip and the window controls share one glass surface,
+   the way Chrome's tab strip and caption buttons do. */
+QWidget#topBar {
+    background: qlineargradient(x1:0, y1:0, x2:0, y2:1,
+        stop:0 %GLASS_TOP%, stop:1 %GLASS_TOP_EDGE%);
+}
+QWidget#windowControls { background: transparent; }
+QToolButton#windowMinButton, QToolButton#windowMaxButton, QToolButton#windowCloseButton {
+    background: transparent;
+    border: none;
+    border-radius: 6px;
+    padding: 0;
+}
+QToolButton#windowMinButton:hover, QToolButton#windowMaxButton:hover {
+    background: %SURFACE_HOVER%;
+}
+QToolButton#windowCloseButton:hover { background: %DANGER%; }
+
 QWidget#navigationBar {
     background: qlineargradient(x1:0, y1:0, x2:0, y2:1,
         stop:0 %GLASS_TOP%, stop:1 %GLASS_TOP_EDGE%);
