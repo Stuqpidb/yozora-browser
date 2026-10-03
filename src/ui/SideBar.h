@@ -32,6 +32,10 @@ public:
     [[nodiscard]] bool isCollapsed() const { return m_collapsed; }
     void setCollapsed(bool collapsed, bool animate = true);
 
+    // The rail floats over the page, so the parent gives it the available
+    // height and the rail keeps its own x (the slide animation owns that).
+    void setAvailableHeight(int height);
+
     // The width the rail occupies when expanded. The window uses this to decide
     // how far the collapse toggle sits from the left edge.
     [[nodiscard]] int expandedWidth() const;
@@ -54,9 +58,11 @@ private:
     QList<RailButton*> m_buttons;
     RailButton* m_homeButton = nullptr;
     RailButton* m_collapseButton = nullptr;
-    QPropertyAnimation* m_widthAnimation = nullptr;
-    // Fades the rail in and out in step with its width, so collapsing reads as
-    // one motion instead of "the icons vanish, then the panel shrinks".
+    // The rail slides out to the left as an overlay; animating the position
+    // (not the width) is what keeps the page from reflowing underneath it.
+    QPropertyAnimation* m_slideAnimation = nullptr;
+    // Fades the rail in and out in step with its slide, so collapsing reads as
+    // one motion instead of "the icons vanish, then the panel moves".
     QGraphicsOpacityEffect* m_opacity = nullptr;
     QVariantAnimation* m_opacityAnimation = nullptr;
     bool m_collapsed = false;

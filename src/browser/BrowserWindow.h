@@ -14,6 +14,7 @@
 #include <QUrl>
 
 class QAction;
+class QResizeEvent;
 class QShortcut;
 class QStackedWidget;
 class QTimer;
@@ -86,6 +87,7 @@ public:
 protected:
     void closeEvent(QCloseEvent* event) override;
     void showEvent(QShowEvent* event) override;
+    void resizeEvent(QResizeEvent* event) override;
     void changeEvent(QEvent* event) override;
 #if defined(Q_OS_WIN)
     // Handles WM_NCHITTEST so a frameless window can still be resized and
@@ -120,6 +122,11 @@ private:
     void updateShieldState();
     void showLibrary(bool bookmarks);
     void showTabContextMenu(int index, const QPoint& globalPos);
+    // Positions the overlay rail and the reveal handle over the page area.
+    void layoutOverlays();
+    // Applies the "sidebar enabled" setting: turns the rail and its handle off
+    // entirely when the user disabled it.
+    void applySideBarEnabled();
 
     // Session persistence. The window writes the open tabs as they change and
     // flags a clean exit on close, so a crash can be told apart from a normal
@@ -154,6 +161,7 @@ private:
     // so a collapsed sidebar can always be brought back without knowing Ctrl+B.
     QToolButton* m_railReveal = nullptr;
     QWidget* m_topBar = nullptr;
+    QWidget* m_contentArea = nullptr;
     QToolButton* m_minButton = nullptr;
     QToolButton* m_maxButton = nullptr;
     QToolButton* m_closeButton = nullptr;
@@ -173,6 +181,7 @@ private:
     bool m_closing = false;
     bool m_browserFullScreen = false;
     bool m_wasMaximizedBeforeFullScreen = false;
+    bool m_sideBarEnabled = true;
     QTimer* m_sessionTimer = nullptr;
     QTimer* m_updateTimer = nullptr;
     // True while an automatic (background) check is running, so its failures and

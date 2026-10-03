@@ -26,6 +26,7 @@ constexpr auto kKeyScrollMode = "appearance/scroll_mode";
 constexpr auto kKeyWindowGeometry = "window/geometry";
 constexpr auto kKeyWindowState = "window/state";
 constexpr auto kKeySideBarCollapsed = "window/sidebar_collapsed";
+constexpr auto kKeySideBarEnabled = "window/sidebar_enabled";
 constexpr auto kKeyRestoreSession = "session/restore_on_start";
 constexpr auto kKeyBackgroundUpdates = "updates/background";
 constexpr auto kKeyHardwareAcceleration = "appearance/hardware_acceleration";
@@ -216,6 +217,20 @@ bool Settings::sideBarCollapsed() const
 void Settings::setSideBarCollapsed(bool collapsed)
 {
     d->store.setValue(QLatin1String(kKeySideBarCollapsed), collapsed);
+}
+
+bool Settings::sideBarEnabled() const
+{
+    return d->store.value(QLatin1String(kKeySideBarEnabled), true).toBool();
+}
+
+void Settings::setSideBarEnabled(bool enabled)
+{
+    if (sideBarEnabled() == enabled) {
+        return;
+    }
+    d->store.setValue(QLatin1String(kKeySideBarEnabled), enabled);
+    emit sideBarEnabledChanged();
 }
 
 bool Settings::restoreSessionOnStart() const
@@ -437,6 +452,7 @@ void Settings::resetToDefaults()
     emit webrtcPolicyChanged();
     emit backgroundUpdatesChanged();
     emit hardwareAccelerationChanged();
+    emit sideBarEnabledChanged();
 }
 
 }  // namespace yozora

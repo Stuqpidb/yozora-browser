@@ -15,10 +15,6 @@ namespace yozora {
 namespace {
 constexpr int kRailWidth = 72;
 constexpr int kButtonSize = 48;
-
-// The rail is animated to zero rather than to a narrow strip: a 12px column of
-// half-visible icons looks broken, whereas no rail at all is obviously "hidden".
-constexpr int kCollapsedWidth = 0;
 }  // namespace
 
 SideBar::SideBar(QWidget* parent)
@@ -63,20 +59,11 @@ SideBar::SideBar(QWidget* parent)
     makeButton(settings, tr("Settings (Ctrl+,)"));
     connect(settings, &RailButton::clicked, this, &SideBar::settingsRequested);
 
-    m_widthAnimation = new QPropertyAnimation(this, "minimumWidth", this);
-    Animation::configure(m_widthAnimation, Animation::kStandardMs);
-    connect(m_widthAnimation, &QVariantAnimation::valueChanged, this, [this] {
-        setMaximumWidth(width());
-    });
-    connect(m_widthAnimation, &QVariantAnimation::finished, this, [this] {
-        // Only hide once the slide is over, otherwise the buttons vanish before
-        // the rail has finished moving.
-        setVisible(!m_collapsed);
-        if (m_collapsed) {
-            setMinimumWidth(0);
-            setMaximumWidth(kCollapsedWidth);
-        }
-    });
+    // The rail is an overlay: it slides off to the left instead of shrinking,
+    // so the page behind it never reflows (that reflow read as the whole window
+    // collapsing). The animation drives the widget's x position.
+    m_slideAnimation = new QPropertyAnimation(this, "pos", this);
+    Animation::configure(m_slideAnimation, Animation::kStandardMs);
 
     m_opacity = new QGraphicsOpacityEffect(this);
     m_opacity->setOpacity(1.0);
@@ -108,6 +95,16 @@ void SideBar::setHomeActive(bool active)
     m_homeButton->setCurrent(active);
 }
 
+void SideBar::setAvailableHeight(int height)
+{
+    resize(kRailWidth, height);
+    // The slide animation owns x while it runs; otherwise place the rail at its
+    // resting x for the current state.
+    if (m_slideAnimation->state() != QAbstractAnimation::Running) {
+        move(m_collapsed ? -kRailWidth : 0, 0);
+    }
+}
+
 void SideBar::onCollapseToggled()
 {
     setCollapsed(!m_collapsed);
@@ -121,25 +118,23 @@ void SideBar::setCollapsed(bool collapsed, bool animate)
     m_collapsed = collapsed;
     m_collapseButton->setToolTip(collapsed ? tr("Show the sidebar") : tr("Hide the sidebar"));
 
-    const int target = collapsed ? kCollapsedWidth : kRailWidth;
+    const int targetX = collapsed ? -kRailWidth : 0;
     const qreal targetOpacity = collapsed ? 0.0 : 1.0;
 
     if (!animate || !isVisible()) {
-        // Without an animation (or before the window is shown) the state is set
-        // outright, otherwise a rail that is already hidden would animate from
-        // whatever width it happened to have.
-        m_widthAnimation->stop();
+        // Before the window is shown there is nothing to animate.
+        m_slideAnimation->stop();
         m_opacityAnimation->stop();
+        move(targetX, y());
         m_opacity->setOpacity(targetOpacity);
-        setVisible(!collapsed);
-        setMinimumWidth(target);
-        setMaximumWidth(target);
         emit collapsedChanged(m_collapsed);
         return;
     }
 
-    setVisible(true);
-    Animation::start(m_widthAnimation, width(), target);
+    m_slideAnimation->stop();
+    m_slideAnimation->setStartValue(QPoint(x(), y()));
+    m_slideAnimation->setEndValue(QPoint(targetX, y()));
+    m_slideAnimation->start();
     Animation::start(m_opacityAnimation, m_opacity->opacity(), targetOpacity);
     emit collapsedChanged(m_collapsed);
 }

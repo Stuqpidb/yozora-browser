@@ -185,13 +185,16 @@ QToolButton#railButton {
 QToolButton#railButton:hover { background: %SURFACE_HOVER%; color: %TEXT%; }
 QToolButton#railButton:checked { background: %SURFACE_ACTIVE%; color: %TEXT%; }
 
-/* The slim handle that brings a hidden rail back. It sits at the very left and
-   is only visible while the rail is collapsed. */
+/* The small handle that brings a hidden rail back. It is a rounded tab at the
+   left edge, visible only while the rail is collapsed. */
 QToolButton#railReveal {
-    background: %GLASS_RAIL%;
-    border: none;
-    border-right: 1px solid %BORDER%;
-    border-radius: 0;
+    background: qlineargradient(x1:0, y1:0, x2:1, y2:0,
+        stop:0 %GLASS_RAIL%, stop:1 %GLASS_RAIL_EDGE%);
+    border: 1px solid %BORDER%;
+    border-top-right-radius: 14px;
+    border-bottom-right-radius: 14px;
+    border-top-left-radius: 0;
+    border-bottom-left-radius: 0;
 }
 QToolButton#railReveal:hover { background: %SURFACE_HOVER%; }
 

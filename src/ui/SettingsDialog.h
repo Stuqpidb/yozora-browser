@@ -55,6 +55,7 @@ private:
     QWidget* buildStartupSection();
     QWidget* buildDownloadsSection();
     QWidget* buildPrivacySection();
+    QWidget* buildInterfaceSection();
     QWidget* buildScrollingSection();
     QWidget* buildDataSection();
     QWidget* buildAboutSection();
@@ -92,6 +93,7 @@ private:
     QCheckBox* m_notifications = nullptr;
     QComboBox* m_webrtcPolicy = nullptr;
     QComboBox* m_scrollMode = nullptr;
+    QCheckBox* m_sideBarEnabled = nullptr;
 
     QLabel* m_storagePath = nullptr;
     QListWidget* m_permissionList = nullptr;

@@ -45,6 +45,7 @@
 #include <QMenu>
 #include <QMessageBox>
 #include <QPointer>
+#include <QResizeEvent>
 #include <QSaveFile>
 #include <QScreen>
 #include <QShortcut>
@@ -170,46 +171,40 @@ void BrowserWindow::buildUi()
 
     root->addWidget(m_topBar);
 
-    // Everything below the top bar: the rail, then the page column.
-    auto* middle = new QWidget(central);
-    auto* midLayout = new QHBoxLayout(middle);
-    midLayout->setContentsMargins(0, 0, 0, 0);
-    midLayout->setSpacing(0);
+    // The address bar also spans the full width, below the tab row; the rail
+    // starts below it.
+    m_navBar = new NavigationBar(central);
+    m_navBar->setObjectName(QStringLiteral("navigationBar"));
+    root->addWidget(m_navBar);
 
-    m_sideBar = new SideBar(middle);
+    // The page area. The rail is an overlay on top of it, not part of the
+    // layout, so showing or hiding the rail never resizes the page.
+    m_contentArea = new QWidget(central);
+    auto* contentLayout = new QVBoxLayout(m_contentArea);
+    contentLayout->setContentsMargins(0, 0, 0, 0);
+    contentLayout->setSpacing(0);
+    m_pages = new QStackedWidget(m_contentArea);
+    m_downloads = new DownloadManager(m_profile->profile(), m_settings, m_contentArea);
+    contentLayout->addWidget(m_pages, 1);
+    contentLayout->addWidget(m_downloads->statusBar());
+    root->addWidget(m_contentArea, 1);
 
-    // The reveal handle sits at the very left, before the rail, and is only
-    // visible while the rail is hidden.
-    m_railReveal = new QToolButton(middle);
+    m_sideBar = new SideBar(m_contentArea);
+    m_sideBar->raise();
+
+    // The reveal handle: a small glass tab at the left edge, shown only while
+    // the rail is hidden so it can always be brought back.
+    m_railReveal = new QToolButton(m_contentArea);
     m_railReveal->setObjectName(QStringLiteral("railReveal"));
     m_railReveal->setCursor(Qt::PointingHandCursor);
     m_railReveal->setToolTip(tr("Show the sidebar (Ctrl+B)"));
-    m_railReveal->setIcon(icons::icon(icons::Shape::ArrowRight, 16,
-                                      QColor(Theme::colors().textMuted)));
-    m_railReveal->setIconSize(QSize(14, 14));
-    m_railReveal->setFixedWidth(16);
+    m_railReveal->setIcon(icons::icon(icons::Shape::ArrowRight, 18, QColor(Theme::colors().text),
+                                      1.3));
+    m_railReveal->setIconSize(QSize(16, 16));
+    m_railReveal->setFixedSize(20, 56);
     m_railReveal->setVisible(false);
+    m_railReveal->raise();
     connect(m_railReveal, &QToolButton::clicked, this, [this] { m_sideBar->setCollapsed(false); });
-    midLayout->addWidget(m_railReveal);
-    midLayout->addWidget(m_sideBar);
-
-    auto* right = new QWidget(middle);
-    auto* column = new QVBoxLayout(right);
-    column->setContentsMargins(0, 0, 0, 0);
-    column->setSpacing(0);
-
-    m_navBar = new NavigationBar(right);
-    m_navBar->setObjectName(QStringLiteral("navigationBar"));
-
-    m_pages = new QStackedWidget(right);
-    m_downloads = new DownloadManager(m_profile->profile(), m_settings, right);
-
-    column->addWidget(m_navBar);
-    column->addWidget(m_pages, 1);
-    column->addWidget(m_downloads->statusBar());
-    midLayout->addWidget(right, 1);
-
-    root->addWidget(middle, 1);
 
     setCentralWidget(central);
     statusBar()->hide();
@@ -231,13 +226,16 @@ void BrowserWindow::buildUi()
     connect(m_sideBar, &SideBar::collapsedChanged, this, [this](bool collapsed) {
         m_settings->setSideBarCollapsed(collapsed);
         // The handle only exists so a hidden rail can come back.
-        m_railReveal->setVisible(collapsed);
+        m_railReveal->setVisible(collapsed && m_sideBarEnabled);
         update();
     });
+    m_sideBarEnabled = m_settings->sideBarEnabled();
     if (m_settings->sideBarCollapsed()) {
         m_sideBar->setCollapsed(true, false);
-        m_railReveal->setVisible(true);
     }
+    applySideBarEnabled();
+    connect(m_settings, &Settings::sideBarEnabledChanged, this,
+            &BrowserWindow::applySideBarEnabled);
 
     // The update signals are wired once, here, rather than inside buildMenu().
     // The menu is rebuilt every time it is opened, and connecting there added one
@@ -361,7 +359,7 @@ QToolButton* BrowserWindow::makeWindowButton(icons::Shape shape, const QString& 
     button->setToolTip(tooltip);
     button->setFocusPolicy(Qt::NoFocus);
     button->setCursor(Qt::ArrowCursor);
-    button->setIcon(icons::icon(shape, 18, QColor(Theme::colors().text)));
+    button->setIcon(icons::icon(shape, 18, QColor(Theme::colors().text), 1.35));
     button->setIconSize(QSize(16, 16));
     button->setFixedSize(40, 30);
     return button;
@@ -424,7 +422,11 @@ void BrowserWindow::buildShortcuts()
     // Ctrl+B hides the rail, the way every other browser does it. When the rail
     // is hidden there is nothing on screen to click, so the shortcut is also the
     // only way back.
-    add(sequence("Ctrl+B"), [this] { m_sideBar->setCollapsed(!m_sideBar->isCollapsed()); });
+    add(sequence("Ctrl+B"), [this] {
+        if (m_sideBarEnabled) {
+            m_sideBar->setCollapsed(!m_sideBar->isCollapsed());
+        }
+    });
     add(sequence("Ctrl+D"), [this] { toggleBookmark(); });
     add(sequence("Ctrl+Shift+H"), [this] {
         if (auto* tab = currentTab()) {
@@ -1001,6 +1003,12 @@ void BrowserWindow::setBrowserFullScreen(bool fullScreen)
         // strip. On a video this is what makes it cover the whole screen.
         m_tabStrip->setVisible(false);
         m_navBar->setVisible(false);
+        if (m_sideBar) {
+            m_sideBar->setVisible(false);
+        }
+        if (m_railReveal) {
+            m_railReveal->setVisible(false);
+        }
         if (m_downloads && m_downloads->statusBar()) {
             m_downloads->statusBar()->setVisible(false);
         }
@@ -1008,6 +1016,8 @@ void BrowserWindow::setBrowserFullScreen(bool fullScreen)
     } else {
         m_tabStrip->setVisible(true);
         m_navBar->setVisible(true);
+        // Re-applies the rail's own enabled/visible state.
+        applySideBarEnabled();
         if (m_downloads && m_downloads->statusBar()) {
             m_downloads->statusBar()->setVisible(m_downloads->activeDownloadCount() > 0);
         }
@@ -1240,6 +1250,36 @@ void BrowserWindow::showShield()
     m_shieldDialog->show();
     m_shieldDialog->raise();
     m_shieldDialog->activateWindow();
+}
+
+void BrowserWindow::resizeEvent(QResizeEvent* event)
+{
+    QMainWindow::resizeEvent(event);
+    layoutOverlays();
+}
+
+void BrowserWindow::layoutOverlays()
+{
+    if (!m_contentArea || !m_sideBar || !m_railReveal) {
+        return;
+    }
+    const int height = m_contentArea->height();
+    m_sideBar->setAvailableHeight(height);
+    // The handle sits at the left edge, vertically centred.
+    m_railReveal->move(0, (height - m_railReveal->height()) / 2);
+}
+
+void BrowserWindow::applySideBarEnabled()
+{
+    m_sideBarEnabled = m_settings->sideBarEnabled();
+    if (!m_sideBarEnabled) {
+        m_sideBar->setVisible(false);
+        m_railReveal->setVisible(false);
+        return;
+    }
+    m_sideBar->setVisible(true);
+    m_railReveal->setVisible(m_sideBar->isCollapsed());
+    layoutOverlays();
 }
 
 void BrowserWindow::showEvent(QShowEvent* event)

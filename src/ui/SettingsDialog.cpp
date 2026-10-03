@@ -210,9 +210,10 @@ SettingsDialog::SettingsDialog(Settings* settings, WebProfile* profile, QWidget*
          tr("The defaults here are the private ones. Everything that weakens privacy has to be "
             "turned on on purpose."),
          buildPrivacySection()},
+        {icons::Shape::Menu, tr("Interface"), tr("How the browser is laid out."),
+         buildInterfaceSection()},
         {icons::Shape::Wheel, tr("Scrolling"), tr("How the mouse wheel moves a page."),
-         buildScrollingSection()},
-        {icons::Shape::Database, tr("Data"), tr("What Yozora keeps on this machine."),
+         buildScrollingSection()},        {icons::Shape::Database, tr("Data"), tr("What Yozora keeps on this machine."),
          buildDataSection()},
         {icons::Shape::Info, tr("About"),
          tr("Version, updates and graphics."), buildAboutSection()},
@@ -525,6 +526,33 @@ QWidget* SettingsDialog::buildPrivacySection()
     return page;
 }
 
+QWidget* SettingsDialog::buildInterfaceSection()
+{
+    auto* page = new QWidget(this);
+    auto* layout = new QVBoxLayout(page);
+    layout->setContentsMargins(26, 20, 26, 24);
+    layout->setSpacing(12);
+
+    auto* box = new QGroupBox(page);
+    auto* boxLayout = new QVBoxLayout(box);
+    m_sideBarEnabled = new QCheckBox(tr("Show the left sidebar"), box);
+    boxLayout->addWidget(m_sideBarEnabled);
+    boxLayout->addWidget(hint(tr("The sidebar holds Home, History, Bookmarks, Downloads, a "
+                                 "private window and Settings. It can also be hidden at any "
+                                 "time with Ctrl+B or its own button; turning it off here "
+                                 "removes it completely. Everything on it is also in the "
+                                 "menu."),
+                              box));
+    connect(m_sideBarEnabled, &QCheckBox::toggled, this, [this](bool on) {
+        if (m_settings && !m_loading) {
+            m_settings->setSideBarEnabled(on);
+        }
+    });
+    layout->addWidget(box);
+    layout->addStretch(1);
+    return page;
+}
+
 QWidget* SettingsDialog::buildScrollingSection()
 {
     auto* page = new QWidget(this);
@@ -744,6 +772,7 @@ void SettingsDialog::loadFromSettings()
 
         m_backgroundUpdates->setChecked(m_settings->backgroundUpdates());
         m_hardwareAcceleration->setChecked(m_settings->hardwareAcceleration());
+        m_sideBarEnabled->setChecked(m_settings->sideBarEnabled());
     }
 
     if (m_profile) {

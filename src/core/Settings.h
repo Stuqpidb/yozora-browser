@@ -71,6 +71,10 @@ public:
     [[nodiscard]] bool sideBarCollapsed() const;
     void setSideBarCollapsed(bool collapsed);
 
+    // Whether the left rail exists at all. Off hides it and its reveal handle.
+    [[nodiscard]] bool sideBarEnabled() const;
+    void setSideBarEnabled(bool enabled);
+
     [[nodiscard]] bool restoreSessionOnStart() const;
     void setRestoreSessionOnStart(bool restore);
 
@@ -146,6 +150,7 @@ signals:
     void webrtcPolicyChanged();
     void backgroundUpdatesChanged();
     void hardwareAccelerationChanged();
+    void sideBarEnabledChanged();
 
 private:
     class QScopedPointer<class SettingsPrivate> d;
